@@ -10,13 +10,13 @@ schema_version: 1
 # A. Identity & brand  (update: yearly)
 # ---------------------------------------------------------------------------
 identity:
-  tenant_id: ""                    # slug, unique per tenant (e.g. "acme-indo")
+  tenant_id: ""                    # slug, unique per tenant (e.g. "acme-my")
   company_name: ""
-  legal_entity: ""                 # PT/CV/LLC full legal name
-  tax_id: ""                       # NPWP / VAT / EIN
+  legal_entity: ""                 # Sdn Bhd / Pte Ltd / PT / LLC full legal name
+  tax_id: ""                       # SST (MY) / NPWP (ID) / UEN (SG) / VAT / EIN
   address: ""
-  country: ""
-  default_locale: "id-ID"          # id-ID or en-US; drives proposal language default
+  country: "Malaysia"              # pilot default
+  default_locale: "en-MY"          # en-MY / id-ID / en-SG / en-US
   signatories:                     # authorized signatories for proposals/SOW
     - name: ""
       title: ""
@@ -25,17 +25,22 @@ identity:
     accent_color: "#50E6FF"
     font_family: "Segoe UI"
     logo_path: ""                  # relative to tenant folder
-    letterhead_path: ""            # docx/pptx template with letterhead
+    letterhead_path: ""            # legacy field; prefer `templates.letterhead_docx`
 
 # ---------------------------------------------------------------------------
 # B. Commercial  (update: quarterly)
 # ---------------------------------------------------------------------------
 commercial:
-  currency: "IDR"
-  tax_rate_pct: 11.0               # PPN default
+  currency: "USD"                  # customer-facing billing currency (MY pilot default)
+  tax_rate_pct: 8.0                # MY SST default; override per tenant
   payment_terms: "Net 30"
-  rate_card_path: "rate-card.csv"       # role, level, daily_rate, location
-  service_catalog_path: "service-catalog.csv"  # service, default_effort_mandays, prereq, deliverable
+  rate_card_path: "rate-card.csv"       # role, level, daily_rate, currency, location
+  service_catalog_path: "service-catalog.csv"  # service, default_effort_mandays, prereq, deliverable, notes
+  fx_reference:                    # internal FX for TCO/MYR reference while billing in USD
+    target: "MYR"
+    rate_myr_per_usd: 4.70
+    last_updated: ""
+    source: "manual — update quarterly"
   partner_tier:
     vendor: "Microsoft"
     tier: ""                       # e.g. "Solutions Partner - Infrastructure Azure"
@@ -58,8 +63,8 @@ standards:
   primary_cloud: "Azure"           # Azure | AWS | GCP | OCI | multi
   secondary_clouds: []
   iac_preference: "Bicep"          # Terraform | Bicep | ARM | Pulumi | CloudFormation
-  default_region_primary: "Southeast Asia"
-  default_region_dr: "East Asia"
+  default_region_primary: "Malaysia Central"
+  default_region_dr: "Southeast Asia"  # Singapore, Malaysia Central's paired region
   naming_convention: "rg-<env>-<workload>-<region>-<nn>"
   tagging_policy:
     required_tags: ["Environment", "Owner", "CostCenter", "Workload"]
@@ -117,6 +122,7 @@ compliance:
   nda_template_path: "legal/nda-template.md"
   assumptions_boilerplate_path: "legal/assumptions.md"
   dependencies_boilerplate_path: "legal/dependencies.md"
+  regulatory_frameworks_relevant: []  # e.g. "PDPA 2010 (MY)", "Bank Negara Malaysia RMiT", "PDPA 2012 (SG)"
 
 # ---------------------------------------------------------------------------
 # G. Guardrails  (rarely change)
@@ -139,6 +145,24 @@ guardrails:
   auto_approve:
     discount_pct_max: 5
     bom_line_additions_max: 3
+
+# ---------------------------------------------------------------------------
+# Templates  (uploaded during onboarding — REQUIRED for branded output)
+# ---------------------------------------------------------------------------
+# Keys populated by tenant-config MCP `register_template` calls. Each entry:
+#   <template_type>:
+#     path: "templates/<template_type>.<ext>"
+#     original_name: "Company Proposal Template v3.docx"
+#     description: "..."
+#     registered_at: "2026-04-18T..."
+#
+# Supported template_type values:
+#   letterhead_docx, letterhead_pptx,
+#   proposal_template_docx, bom_template_xlsx,
+#   architecture_template_docx, sow_template_docx,
+#   presentation_template_pptx, assessment_template_docx,
+#   project_plan_template_xlsx
+templates: {}
 
 # ---------------------------------------------------------------------------
 # Learned patterns  (grows from training-project feedback; not set at onboarding)

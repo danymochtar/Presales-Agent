@@ -1,16 +1,29 @@
 # Presales Agent — Pilot
 
-A self-provisioning agent framework for presales teams. Each tenant (company / presales head) configures the agent via an onboarding interview + a train-of-trainer loop on a real project, then uses skills to generate deliverables (BOM, proposal, architecture, assessment, project plan).
+A self-provisioning agent framework for presales teams. Each tenant (company / presales head) configures the agent via an onboarding interview, then trains it on 1 real project (train-of-trainer), then uses skills to generate deliverables (BOM, proposal, architecture, assessment, project plan).
 
-This repo contains **Pilot steps 1-5**:
+**Pilot target market:** Malaysia. Customer-facing billing in USD, internal reference to MYR via FX.
 
-1. `static-data-schema/` — canonical tenant configuration schema
-2. `mcp-servers/tenant-config/` — CRUD for per-tenant config, rate card, knowledge base, projects
-3. `mcp-servers/inventory-parser/` — RVTools / Azure Migrate / generic inventory → normalized workloads
-4. `.claude/skills/presales-onboarding/` — Step 0 quick-config interview
-5. `.claude/skills/generate-bom/` — first deliverable generator
+## What's in the repo
 
-Future steps (not in this scaffold): pricing MCP, doc-render MCP, redaction MCP, training-project + pattern-extractor skills, proposal/architecture/assessment/project-plan skills, market-research MCP.
+### MCP servers
+
+| Server | Purpose |
+|---|---|
+| `tenant-config` | CRUD for tenant config, rate card, service catalog, knowledge base, templates, projects, training feedback, learned patterns |
+| `inventory-parser` | RVTools / Azure Migrate / generic inventory → normalized workload schema |
+| `pricing` | Azure Retail Prices API wrapper + FX helper (USD native, MYR/IDR/SGD conversion) |
+
+### Skills
+
+| Skill | Purpose |
+|---|---|
+| `presales-onboarding` | Step 0 quick-config interview. Requires at least 1 template upload upfront. |
+| `training-project` | Train-of-trainer loop. Walks 1 real project end-to-end, collects corrections, extracts patterns, graduates the agent. |
+| `pattern-extractor` | Called by `training-project` (or standalone). Turns free-form feedback into durable rules stored in `learned-patterns.yaml`. |
+| `generate-bom` | Produces Azure BOM using tenant config + pricing MCP + workloads. Versioned during training mode. |
+
+Future (not yet in repo): generate-proposal, generate-architecture, generate-assessment, generate-project-plan, doc-render MCP, redaction MCP, market-research MCP.
 
 ## Architecture
 
@@ -19,115 +32,136 @@ Future steps (not in this scaffold): pricing MCP, doc-render MCP, redaction MCP,
 │ Claude Code / Agent                                               │
 │                                                                   │
 │   Skills (.claude/skills/):                                       │
-│     • presales-onboarding  → walks setup interview                │
-│     • generate-bom          → produces Azure BOM                  │
-│     • (future) training-project, generate-proposal, ...           │
+│     • presales-onboarding   → setup interview + template upload   │
+│     • training-project      → train-of-trainer loop               │
+│     • pattern-extractor     → feedback → learned-patterns.yaml    │
+│     • generate-bom          → BOM via pricing MCP                 │
 │                                                                   │
 └────────────┬──────────────────────────────────────────────────────┘
              │ MCP (stdio)
-   ┌─────────┴──────────┬───────────────────────┐
-   │                    │                       │
-┌──▼──────────────┐  ┌──▼────────────────┐  ┌──▼──────────────────┐
-│ tenant-config   │  │ inventory-parser  │  │ (future MCP servers)│
-│ MCP server      │  │ MCP server        │  │ pricing, doc-render │
-│                 │  │                   │  │ redaction, market   │
-│ tenants/ folder │  │ RVTools / Azure   │  │                     │
-│ config + KB +   │  │ Migrate / generic │  │                     │
-│ projects        │  │ → workloads JSON  │  │                     │
-└─────────────────┘  └───────────────────┘  └─────────────────────┘
+   ┌─────────┼──────────────────────────┬─────────────────────┐
+   │         │                          │                     │
+┌──▼────────────┐  ┌────────────────────▼─┐  ┌────────────────▼─┐
+│ tenant-config │  │ inventory-parser    │  │ pricing           │
+│               │  │                     │  │                   │
+│ tenants/*     │  │ RVTools / Azure     │  │ Azure Retail API  │
+│ config + KB + │  │ Migrate / generic   │  │ + FX conversion   │
+│ templates +   │  │ → workloads JSON    │  │ (24h cache)       │
+│ projects      │  │                     │  │                   │
+└───────────────┘  └─────────────────────┘  └───────────────────┘
 ```
 
 ## Quick start
 
 ### 1. Install MCP server dependencies
 
-Each MCP server is an independent Python package. Using `uv`:
-
 ```bash
-cd mcp-servers/tenant-config && uv sync && cd ../..
-cd mcp-servers/inventory-parser && uv sync && cd ../..
+for s in tenant-config inventory-parser pricing; do
+  (cd mcp-servers/$s && uv sync)
+done
 ```
 
-Or with pip (create a virtualenv first):
+Or with pip:
 
 ```bash
 pip install -e mcp-servers/tenant-config
 pip install -e mcp-servers/inventory-parser
+pip install -e mcp-servers/pricing
 ```
 
-### 2. Register the MCP servers
+### 2. Onboard your tenant
 
-The repo includes `.mcp.json` which Claude Code picks up automatically. To use with the Claude Agent SDK or another MCP client, point at `mcp-servers/<name>/server.py`.
-
-### 3. Onboard your tenant
-
-In Claude Code, invoke the onboarding skill:
+In Claude Code:
 
 ```
 /presales-onboarding
 ```
 
-or just ask: "set up a new tenant for Acme Cloud". The agent will walk through the 7 schema categories and persist config under `tenants/<your-tenant-id>/`.
+or: "set up a new tenant for Acme Cloud in Malaysia."
 
-### 4. Parse an inventory and generate a BOM
+The agent will:
+1. Create the tenant folder under `tenants/<tenant-id>/`
+2. Require you to upload at least 1 template (letterhead DOCX or proposal template)
+3. Walk through the 7 config categories with Malaysia-market defaults
+4. Seed rate card + service catalog
+5. Invite 2-3 past deliverables as knowledge samples
+
+### 3. Train the agent on a real project
+
+```
+/training-project
+```
+
+Pick a recent won project. The agent will:
+1. Parse your inputs (RVTools / Azure Migrate)
+2. Generate each deliverable (starting with BOM)
+3. Show it to you
+4. Take your feedback verbatim
+5. Invoke `pattern-extractor` to lift rules out of the feedback
+6. Confirm each candidate rule with you before persisting
+7. Regenerate with new rules applied
+8. Generate an Operating Model document at the end
+
+### 4. Generate BOMs for real
 
 ```
 I have an RVTools export at /path/to/export.xlsx. Parse it for tenant
-acme-indo, project migration-phase-1, then generate a BOM.
+acme-my, project migration-phase-1, then generate a BOM in Malaysia Central
+with southeast asia DR.
 ```
-
-The agent will:
-1. Call `parse_rvtools` → normalized workloads
-2. Save workloads to `tenants/acme-indo/projects/migration-phase-1/inputs/workloads.json`
-3. Run `generate-bom` skill → save `deliverables/bom.md`
 
 ## The 7 static-data categories
 
 See `static-data-schema/tenant-schema.yaml` for the canonical reference.
 
-| # | Category | Update cadence | Why it matters |
-|---|---|---|---|
-| A | Identity & brand | yearly | document header, signatory, legal entity |
-| B | Commercial | quarterly | rate card, service catalog, margin, discount matrix |
-| C | Technical standards | as-needed | IaC, regions, naming, default tooling |
-| D | Team & capacity | monthly | RACI, roster, escalation |
-| E | Knowledge base | continuous | past proposals/BOMs — drives output quality |
-| F | Compliance & legal | yearly | certifications, T&C, SLA, NDA |
-| G | Guardrails | rarely | redaction, must-review items, auto-approve thresholds |
+| # | Category | Update cadence |
+|---|---|---|
+| A | Identity & brand | yearly |
+| B | Commercial (rate card, catalog, margin, FX) | quarterly |
+| C | Technical standards | as-needed |
+| D | Team & capacity | monthly |
+| E | Knowledge base (past deliverables) | continuous |
+| F | Compliance & legal | yearly |
+| G | Guardrails | rarely |
+| + | Templates (DOCX/PPTX/XLSX) | rarely — required at onboarding |
+
+## Malaysia market defaults
+
+- **Billing currency:** USD (customer-facing for enterprise)
+- **FX reference:** MYR (for internal TCO + customer-facing MYR equivalents)
+- **Primary region:** Malaysia Central (for data residency, BFSI, gov)
+- **DR region:** Southeast Asia (Singapore — Malaysia Central's paired region)
+- **Tax:** SST 8%
+- **Compliance frequently relevant:** PDPA 2010, Bank Negara RMiT (BFSI), MAMPU guidelines (gov)
+
+Rate card seed: see `.claude/skills/presales-onboarding/seed-data.md` for USD daily rates at Malaysia market ballpark.
 
 ## Data sensitivity
 
-Tenant folders (`tenants/<tenant-id>/`) are **gitignored by default**. The `_example/` folder is the only tenant committed to the repo as a reference shape.
+- Tenant folders (`tenants/<id>/`) are **gitignored**. Only `_example/` is committed.
+- RVTools / Azure Migrate exports contain sensitive data — tenant `guardrails.data_handling` controls redaction defaults (IPs + credentials + emails redacted by default; hostnames kept since they encode useful context).
+- Pricing MCP cache (`mcp-servers/pricing/.cache/`) is gitignored.
 
-RVTools/Azure Migrate exports contain hostnames, IPs, and sometimes credentials — the tenant `guardrails.data_handling` settings control redaction defaults. The redaction MCP server (future) will enforce these at the boundary to the LLM.
-
-## Development
+## Repo layout
 
 ```
 presales-agent/
-├── .mcp.json                         # MCP server registration
+├── .mcp.json                         # registers 3 MCP servers
 ├── .gitignore
 ├── README.md
 ├── static-data-schema/
-│   └── tenant-schema.yaml            # canonical shape (7 categories)
+│   └── tenant-schema.yaml            # canonical shape (7 categories + templates)
 ├── .claude/skills/
-│   ├── presales-onboarding/
-│   │   ├── SKILL.md
-│   │   └── seed-data.md              # suggested defaults
-│   └── generate-bom/
-│       ├── SKILL.md
-│       └── sku-cheatsheet.md         # VM/disk/service sizing guide
+│   ├── presales-onboarding/          # SKILL.md + seed-data.md
+│   ├── training-project/             # train-of-trainer loop
+│   ├── pattern-extractor/            # feedback → rules
+│   └── generate-bom/                 # SKILL.md + sku-cheatsheet.md
 ├── mcp-servers/
-│   ├── tenant-config/
-│   │   ├── server.py
-│   │   ├── pyproject.toml
-│   │   └── README.md
-│   └── inventory-parser/
-│       ├── server.py
-│       ├── pyproject.toml
-│       └── README.md
+│   ├── tenant-config/                # tenant + KB + templates + projects + feedback
+│   ├── inventory-parser/             # RVTools / Azure Migrate / generic
+│   └── pricing/                      # Azure Retail Prices + FX
 └── tenants/
-    └── _example/                     # reference tenant (committed)
+    └── _example/                     # Malaysia reference tenant (USD, MY Central)
         ├── config.yaml
         ├── rate-card.csv
         ├── service-catalog.csv
@@ -137,4 +171,4 @@ presales-agent/
 
 ## Branch
 
-Active development branch: `claude/presales-agent-pilot-qDBpJ`.
+Active development: `claude/presales-agent-pilot-qDBpJ`

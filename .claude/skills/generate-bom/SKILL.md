@@ -63,14 +63,24 @@ From the service catalog, pull recurring shared services:
 - Private DNS zones
 - Monitoring workspace
 
-### 4. Compute Azure monthly cost
+### 4. Compute Azure monthly cost (via pricing MCP)
 
-For this pilot, the `pricing-mcp` server is NOT yet wired up. Options:
-- **Option A (preferred when Azure Migrate input is available):** use `monthly_cost_estimate_usd` from the parsed workloads (Azure Migrate already priced them).
-- **Option B:** ask the user to paste region-specific pricing for the main SKUs, and apply ratios for the rest. Be explicit in the BOM about which line items are "ballpark" vs. "from Azure Migrate".
-- **Option C:** if user allows web research, call the pricing API via web-fetch or the (future) `pricing-mcp`. For now, mark price lines as `TBD` with the SKU and quantity filled in, and note "run through Azure Calculator before sending to customer".
+Use the `pricing` MCP server (native USD from Azure Retail Prices API).
 
-Always convert to the tenant currency using the current FX rate (ask user to confirm FX or use a stated benchmark). State the FX rate used in the Assumptions section.
+1. Determine the target region(s). For Malaysia market default: `malaysiacentral` primary, `southeastasia` DR. Confirm with tenant config `standards.default_region_primary`.
+2. Build a list of unique `(arm_sku_name, os_type, quantity)` tuples from the workloads.
+3. Call `batch_vm_prices(arm_sku_names=[...], region=<region>, os_type=<linux|windows>, term=<consumption|reservation-1y|reservation-3y>)`. If mixed OS, call once per os_type.
+4. For each workload, multiply `per_vm_monthly_usd × quantity`. Sum.
+5. For storage, for each disk SKU in use, call `get_managed_disk_price(sku, region)` and compute GB × rate × quantity.
+6. For supporting services (Firewall, Bastion, Log Analytics, Defender, Entra ID P1/P2, Backup), use `search_prices` with service-specific filters or cite the `sku-cheatsheet.md` baseline order-of-magnitude and mark as estimates if precise pricing can't be resolved.
+7. **If the SKU is not available in Malaysia Central**, the pricing call will return `found: false`. Fall back to Southeast Asia pricing and note this in Assumptions ("SKU X not yet available in Malaysia Central; priced from Southeast Asia as proxy").
+
+**Currency handling:**
+- Retail prices are USD. Keep BOM in USD (customer-facing) unless tenant config says otherwise.
+- For internal MYR reference or TCO comparison, call `usd_to_currency(amount, "MYR", rate=<from tenant.commercial.fx_reference>)`. Always pass the tenant's FX rate explicitly — don't rely on the MCP's built-in fallback for final numbers.
+- State the FX rate and its source + date in the Assumptions section.
+
+**If Azure Migrate output has `monthly_cost_estimate_usd` populated**: use it as a cross-check. If it differs from the pricing MCP result by >10%, flag the discrepancy to the user — don't silently pick one.
 
 ### 5. Compute implementation effort & services cost
 
@@ -176,8 +186,13 @@ Default structure (override if knowledge samples show a different house style):
 - Apply tenant redaction policy to any hostnames/IPs that appear in the output if `guardrails.data_handling` specifies.
 - Remind the user that the BOM is a draft requiring the "final pricing" review per the tenant's must-review-before-send list.
 
-## Integration points (future)
+## Integration points
 
-- `pricing-mcp` will replace the manual pricing step with live Azure Retail Prices lookups
-- `doc-render-mcp` will render this Markdown into DOCX/PDF with tenant branding (letterhead from `identity.brand.letterhead_path`)
-- `pattern-extractor` skill will capture any user corrections as learned patterns for next time
+- `pricing` MCP — live Azure Retail Prices lookups (USD) + FX helper (MYR/IDR/SGD etc.)
+- `training-project` skill — during training mode, BOM drafts are versioned (v1, v2) and corrections feed `pattern-extractor`
+- `pattern-extractor` skill — captures BOM-specific rules ("always separate license from compute", etc.) into `learned-patterns.yaml`
+
+## Future integrations
+
+- `doc-render` MCP (not yet built) — render Markdown into branded DOCX/XLSX using the tenant's registered `bom_template_xlsx` or `letterhead_docx`
+- `redaction` MCP (not yet built) — enforce tenant `guardrails.data_handling` before output

@@ -1,10 +1,12 @@
 """Tenant config MCP server: CRUD for per-tenant config, knowledge base, and projects."""
 from __future__ import annotations
 
+import base64
 import csv
 import io
 import json
 import re
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -20,6 +22,20 @@ SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,62}$")
 VALID_SECTIONS = {
     "identity", "commercial", "standards", "team",
     "knowledge_base", "compliance", "guardrails",
+}
+
+# Required at minimum 1 of these to complete onboarding per user preference:
+# templates must be uploaded at start of onboarding.
+TEMPLATE_TYPES = {
+    "letterhead_docx",
+    "letterhead_pptx",
+    "proposal_template_docx",
+    "bom_template_xlsx",
+    "architecture_template_docx",
+    "sow_template_docx",
+    "presentation_template_pptx",
+    "assessment_template_docx",
+    "project_plan_template_xlsx",
 }
 
 mcp = FastMCP("tenant-config")
@@ -322,6 +338,94 @@ def log_training_feedback(
         lp["patterns"] = patterns
         _dump_yaml(lp_path, lp)
     return {"logged": True, "pattern_recorded": bool(extracted_pattern)}
+
+
+@mcp.tool()
+def register_template(
+    tenant_id: str,
+    template_type: str,
+    source_path: str,
+    description: str = "",
+) -> dict:
+    """Copy a template file (docx/pptx/xlsx) into the tenant's templates/ folder and record it in config.
+
+    `template_type` must be one of: letterhead_docx, letterhead_pptx,
+    proposal_template_docx, bom_template_xlsx, architecture_template_docx,
+    sow_template_docx, presentation_template_pptx, assessment_template_docx,
+    project_plan_template_xlsx.
+    """
+    if template_type not in TEMPLATE_TYPES:
+        raise ValueError(f"invalid template_type. Allowed: {sorted(TEMPLATE_TYPES)}")
+    src = Path(source_path).expanduser()
+    if not src.exists():
+        raise FileNotFoundError(f"source file not found: {source_path}")
+
+    tdir = _tenant_dir(tenant_id)
+    templates_dir = tdir / "templates"
+    templates_dir.mkdir(parents=True, exist_ok=True)
+    dest = templates_dir / f"{template_type}{src.suffix}"
+    shutil.copy2(src, dest)
+
+    cfg_path = tdir / "config.yaml"
+    cfg = _load_yaml(cfg_path)
+    templates = cfg.get("templates") or {}
+    templates[template_type] = {
+        "path": str(dest.relative_to(tdir)),
+        "original_name": src.name,
+        "description": description,
+        "registered_at": _now(),
+    }
+    cfg["templates"] = templates
+    cfg["_updated_at"] = _now()
+    _dump_yaml(cfg_path, cfg)
+    return {"template_type": template_type, "path": str(dest.relative_to(REPO_ROOT)), "size_bytes": dest.stat().st_size}
+
+
+@mcp.tool()
+def register_template_b64(
+    tenant_id: str,
+    template_type: str,
+    filename: str,
+    content_b64: str,
+    description: str = "",
+) -> dict:
+    """Same as register_template but accepts the file content as base64 (for clients that can't pass a path)."""
+    if template_type not in TEMPLATE_TYPES:
+        raise ValueError(f"invalid template_type. Allowed: {sorted(TEMPLATE_TYPES)}")
+    tdir = _tenant_dir(tenant_id)
+    templates_dir = tdir / "templates"
+    templates_dir.mkdir(parents=True, exist_ok=True)
+    suffix = Path(filename).suffix or ""
+    dest = templates_dir / f"{template_type}{suffix}"
+    dest.write_bytes(base64.b64decode(content_b64))
+
+    cfg_path = tdir / "config.yaml"
+    cfg = _load_yaml(cfg_path)
+    templates = cfg.get("templates") or {}
+    templates[template_type] = {
+        "path": str(dest.relative_to(tdir)),
+        "original_name": filename,
+        "description": description,
+        "registered_at": _now(),
+    }
+    cfg["templates"] = templates
+    cfg["_updated_at"] = _now()
+    _dump_yaml(cfg_path, cfg)
+    return {"template_type": template_type, "path": str(dest.relative_to(REPO_ROOT)), "size_bytes": dest.stat().st_size}
+
+
+@mcp.tool()
+def list_templates(tenant_id: str) -> dict:
+    """List registered templates for a tenant. Returns the templates section of config + missing types."""
+    cfg = _load_yaml(_tenant_dir(tenant_id) / "config.yaml")
+    registered = cfg.get("templates") or {}
+    missing = sorted(t for t in TEMPLATE_TYPES if t not in registered)
+    return {
+        "registered": registered,
+        "available_types": sorted(TEMPLATE_TYPES),
+        "missing": missing,
+        "onboarding_complete": bool(registered),
+    }
 
 
 @mcp.tool()

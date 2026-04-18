@@ -1,9 +1,9 @@
 role,level,daily_rate,currency,location
-Solution Architect,Senior,3500000,IDR,ID
-Solution Architect,Lead,5000000,IDR,ID
-Presales Consultant,Mid,2500000,IDR,ID
-Project Manager,Senior,3000000,IDR,ID
-Cloud Engineer,Mid,2000000,IDR,ID
-Cloud Engineer,Senior,3000000,IDR,ID
-Migration Engineer,Senior,3200000,IDR,ID
-Security Engineer,Senior,3500000,IDR,ID
+Solution Architect,Senior,900,USD,MY
+Solution Architect,Lead,1200,USD,MY
+Presales Consultant,Mid,650,USD,MY
+Project Manager,Senior,750,USD,MY
+Cloud Engineer,Mid,500,USD,MY
+Cloud Engineer,Senior,750,USD,MY
+Migration Engineer,Senior,800,USD,MY
+Security Engineer,Senior,900,USD,MY

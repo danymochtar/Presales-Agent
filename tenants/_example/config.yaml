@@ -2,12 +2,12 @@ schema_version: 1
 
 identity:
   tenant_id: "_example"
-  company_name: "Example Cloud Partner"
-  legal_entity: "PT Example Cloud Partner"
+  company_name: "Example Cloud Partner MY"
+  legal_entity: "Example Cloud Partner Sdn Bhd"
   tax_id: ""
-  address: "Jakarta, Indonesia"
-  country: "Indonesia"
-  default_locale: "id-ID"
+  address: "Kuala Lumpur, Malaysia"
+  country: "Malaysia"
+  default_locale: "en-MY"
   signatories:
     - name: "Jane Doe"
       title: "Presales Head"
@@ -19,11 +19,16 @@ identity:
     letterhead_path: ""
 
 commercial:
-  currency: "IDR"
-  tax_rate_pct: 11.0
+  currency: "USD"
+  tax_rate_pct: 8.0
   payment_terms: "Net 30"
   rate_card_path: "rate-card.csv"
   service_catalog_path: "service-catalog.csv"
+  fx_reference:
+    target: "MYR"
+    rate_myr_per_usd: 4.70
+    last_updated: "2026-04"
+    source: "manual — update quarterly against Bank Negara reference rate"
   partner_tier:
     vendor: "Microsoft"
     tier: "Solutions Partner - Infrastructure Azure"
@@ -43,11 +48,11 @@ standards:
   primary_cloud: "Azure"
   secondary_clouds: []
   iac_preference: "Bicep"
-  default_region_primary: "Southeast Asia"
-  default_region_dr: "East Asia"
+  default_region_primary: "Malaysia Central"
+  default_region_dr: "Southeast Asia"
   naming_convention: "rg-<env>-<workload>-<region>-<nn>"
   tagging_policy:
-    required_tags: ["Environment", "Owner", "CostCenter", "Workload"]
+    required_tags: ["Environment", "Owner", "CostCenter", "Workload", "DataClassification"]
   security_baseline: "CIS Microsoft Azure Foundations Benchmark v2.0"
   default_tooling:
     monitoring: "Azure Monitor + Log Analytics"
@@ -87,6 +92,9 @@ compliance:
   nda_template_path: "legal/nda-template.md"
   assumptions_boilerplate_path: "legal/assumptions.md"
   dependencies_boilerplate_path: "legal/dependencies.md"
+  regulatory_frameworks_relevant:
+    - "PDPA 2010 (Malaysia)"
+    - "Bank Negara Malaysia RMiT (if BFSI)"
 
 guardrails:
   data_handling:
@@ -99,12 +107,16 @@ guardrails:
     - "discount above matrix threshold"
     - "legal terms changes"
     - "commitment to delivery date"
+    - "data residency claims"
   prohibited_statements:
     - "guaranteed performance improvement"
     - "100% uptime"
     - "fully automated migration with zero downtime"
+    - "compliant with [regulation] — unless verified by legal"
   auto_approve:
     discount_pct_max: 5
     bom_line_additions_max: 3
+
+templates: {}
 
 learned_patterns_path: "learned-patterns.yaml"

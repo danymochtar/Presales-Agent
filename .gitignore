@@ -27,6 +27,7 @@ tenants/*
 *.log
 tmp/
 .cache/
+mcp-servers/pricing/.cache/
 
 # Claude local settings
 .claude/settings.local.json

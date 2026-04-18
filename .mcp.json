@@ -7,6 +7,10 @@
     "inventory-parser": {
       "command": "python",
       "args": ["mcp-servers/inventory-parser/server.py"]
+    },
+    "pricing": {
+      "command": "python",
+      "args": ["mcp-servers/pricing/server.py"]
     }
   }
 }
