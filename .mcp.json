@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "tenant-config": {
+      "command": "python",
+      "args": ["mcp-servers/tenant-config/server.py"]
+    },
+    "inventory-parser": {
+      "command": "python",
+      "args": ["mcp-servers/inventory-parser/server.py"]
+    }
+  }
+}

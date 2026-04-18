@@ -1,0 +1,146 @@
+# Presales Agent — Tenant Schema
+#
+# Canonical shape for per-tenant static configuration.
+# Each tenant lives at tenants/<tenant-id>/config.yaml and follows this schema.
+# Update cadence noted per section drives UX grouping in the settings/onboarding flow.
+
+schema_version: 1
+
+# ---------------------------------------------------------------------------
+# A. Identity & brand  (update: yearly)
+# ---------------------------------------------------------------------------
+identity:
+  tenant_id: ""                    # slug, unique per tenant (e.g. "acme-indo")
+  company_name: ""
+  legal_entity: ""                 # PT/CV/LLC full legal name
+  tax_id: ""                       # NPWP / VAT / EIN
+  address: ""
+  country: ""
+  default_locale: "id-ID"          # id-ID or en-US; drives proposal language default
+  signatories:                     # authorized signatories for proposals/SOW
+    - name: ""
+      title: ""
+  brand:
+    primary_color: "#0078D4"
+    accent_color: "#50E6FF"
+    font_family: "Segoe UI"
+    logo_path: ""                  # relative to tenant folder
+    letterhead_path: ""            # docx/pptx template with letterhead
+
+# ---------------------------------------------------------------------------
+# B. Commercial  (update: quarterly)
+# ---------------------------------------------------------------------------
+commercial:
+  currency: "IDR"
+  tax_rate_pct: 11.0               # PPN default
+  payment_terms: "Net 30"
+  rate_card_path: "rate-card.csv"       # role, level, daily_rate, location
+  service_catalog_path: "service-catalog.csv"  # service, default_effort_mandays, prereq, deliverable
+  partner_tier:
+    vendor: "Microsoft"
+    tier: ""                       # e.g. "Solutions Partner - Infrastructure Azure"
+    csp_model: ""                  # Direct / Indirect / none
+  margin:
+    target_gross_margin_pct: 35.0
+    minimum_gross_margin_pct: 20.0
+  discount_matrix:                 # auto-approvable ranges
+    - max_pct: 5
+      approver: "presales"
+    - max_pct: 15
+      approver: "presales_head"
+    - max_pct: 30
+      approver: "country_manager"
+
+# ---------------------------------------------------------------------------
+# C. Technical standards  (update: when new tech adopted)
+# ---------------------------------------------------------------------------
+standards:
+  primary_cloud: "Azure"           # Azure | AWS | GCP | OCI | multi
+  secondary_clouds: []
+  iac_preference: "Bicep"          # Terraform | Bicep | ARM | Pulumi | CloudFormation
+  default_region_primary: "Southeast Asia"
+  default_region_dr: "East Asia"
+  naming_convention: "rg-<env>-<workload>-<region>-<nn>"
+  tagging_policy:
+    required_tags: ["Environment", "Owner", "CostCenter", "Workload"]
+  security_baseline: "CIS Microsoft Azure Foundations Benchmark v2.0"
+  default_tooling:
+    monitoring: "Azure Monitor + Log Analytics"
+    backup: "Azure Backup"
+    identity: "Entra ID"
+    ci_cd: "Azure DevOps"
+  reference_patterns:              # pattern library (pointer to knowledge base entries)
+    - "Azure Landing Zone (Enterprise Scale)"
+    - "Hub-Spoke Network"
+    - "IaaS Migration Lift-and-Shift"
+
+# ---------------------------------------------------------------------------
+# D. Team & capacity  (update: monthly)
+# ---------------------------------------------------------------------------
+team:
+  roster_path: "team-roster.csv"   # name, role, level, certifications, availability_pct
+  raci_default:                    # who does what on a typical project
+    proposal: { R: "Presales", A: "Presales Head", C: ["Solution Architect"], I: ["Account Manager"] }
+    architecture: { R: "Solution Architect", A: "Presales Head", C: ["Security"], I: [] }
+    bom: { R: "Presales", A: "Presales Head", C: ["Solution Architect"], I: [] }
+    assessment: { R: "Solution Architect", A: "Presales Head", C: [], I: [] }
+    project_plan: { R: "Project Manager", A: "Delivery Head", C: ["Solution Architect"], I: [] }
+  escalation:
+    - level: "L1"
+      role: "Presales"
+    - level: "L2"
+      role: "Presales Head"
+    - level: "L3"
+      role: "Country Manager"
+
+# ---------------------------------------------------------------------------
+# E. Knowledge base  (grow continuously)
+# ---------------------------------------------------------------------------
+knowledge_base:
+  root: "knowledge-base"           # folder under tenant dir; subfolders by deliverable type
+  index_path: "knowledge-base/index.yaml"  # list of samples with metadata
+  # Each sample entry follows:
+  #   - path: "proposals/2025-acme-migration.md"
+  #     deliverable_type: "proposal"
+  #     outcome: "won" | "lost" | "pending"
+  #     industry: "manufacturing"
+  #     use_as_reference: true
+  #     notes: "good exec summary, reuse voice"
+
+# ---------------------------------------------------------------------------
+# F. Compliance & legal  (update: yearly)
+# ---------------------------------------------------------------------------
+compliance:
+  certifications: []              # ISO 27001, SOC 2 Type II, PCI-DSS, etc.
+  standard_tnc_path: "legal/terms-and-conditions.md"
+  sla_template_path: "legal/sla-template.md"
+  nda_template_path: "legal/nda-template.md"
+  assumptions_boilerplate_path: "legal/assumptions.md"
+  dependencies_boilerplate_path: "legal/dependencies.md"
+
+# ---------------------------------------------------------------------------
+# G. Guardrails  (rarely change)
+# ---------------------------------------------------------------------------
+guardrails:
+  data_handling:
+    redact_ip_addresses: true
+    redact_credentials: true
+    redact_personal_emails: true
+    redact_hostnames: false        # usually keep; hostnames encode env/role context
+  must_review_before_send:
+    - "final pricing"
+    - "discount above matrix threshold"
+    - "legal terms changes"
+    - "commitment to delivery date"
+  prohibited_statements:
+    - "guaranteed performance improvement"
+    - "100% uptime"
+    - "fully automated migration with zero downtime"
+  auto_approve:
+    discount_pct_max: 5
+    bom_line_additions_max: 3
+
+# ---------------------------------------------------------------------------
+# Learned patterns  (grows from training-project feedback; not set at onboarding)
+# ---------------------------------------------------------------------------
+learned_patterns_path: "learned-patterns.yaml"

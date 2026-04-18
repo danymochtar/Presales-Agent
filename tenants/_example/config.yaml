@@ -1,0 +1,110 @@
+schema_version: 1
+
+identity:
+  tenant_id: "_example"
+  company_name: "Example Cloud Partner"
+  legal_entity: "PT Example Cloud Partner"
+  tax_id: ""
+  address: "Jakarta, Indonesia"
+  country: "Indonesia"
+  default_locale: "id-ID"
+  signatories:
+    - name: "Jane Doe"
+      title: "Presales Head"
+  brand:
+    primary_color: "#0078D4"
+    accent_color: "#50E6FF"
+    font_family: "Segoe UI"
+    logo_path: ""
+    letterhead_path: ""
+
+commercial:
+  currency: "IDR"
+  tax_rate_pct: 11.0
+  payment_terms: "Net 30"
+  rate_card_path: "rate-card.csv"
+  service_catalog_path: "service-catalog.csv"
+  partner_tier:
+    vendor: "Microsoft"
+    tier: "Solutions Partner - Infrastructure Azure"
+    csp_model: "Indirect"
+  margin:
+    target_gross_margin_pct: 35.0
+    minimum_gross_margin_pct: 20.0
+  discount_matrix:
+    - max_pct: 5
+      approver: "presales"
+    - max_pct: 15
+      approver: "presales_head"
+    - max_pct: 30
+      approver: "country_manager"
+
+standards:
+  primary_cloud: "Azure"
+  secondary_clouds: []
+  iac_preference: "Bicep"
+  default_region_primary: "Southeast Asia"
+  default_region_dr: "East Asia"
+  naming_convention: "rg-<env>-<workload>-<region>-<nn>"
+  tagging_policy:
+    required_tags: ["Environment", "Owner", "CostCenter", "Workload"]
+  security_baseline: "CIS Microsoft Azure Foundations Benchmark v2.0"
+  default_tooling:
+    monitoring: "Azure Monitor + Log Analytics"
+    backup: "Azure Backup"
+    identity: "Entra ID"
+    ci_cd: "Azure DevOps"
+  reference_patterns:
+    - "Azure Landing Zone (Enterprise Scale)"
+    - "Hub-Spoke Network"
+    - "IaaS Migration Lift-and-Shift"
+
+team:
+  roster_path: "team-roster.csv"
+  raci_default:
+    proposal: { R: "Presales", A: "Presales Head", C: ["Solution Architect"], I: ["Account Manager"] }
+    architecture: { R: "Solution Architect", A: "Presales Head", C: ["Security"], I: [] }
+    bom: { R: "Presales", A: "Presales Head", C: ["Solution Architect"], I: [] }
+    assessment: { R: "Solution Architect", A: "Presales Head", C: [], I: [] }
+    project_plan: { R: "Project Manager", A: "Delivery Head", C: ["Solution Architect"], I: [] }
+  escalation:
+    - level: "L1"
+      role: "Presales"
+    - level: "L2"
+      role: "Presales Head"
+    - level: "L3"
+      role: "Country Manager"
+
+knowledge_base:
+  root: "knowledge-base"
+  index_path: "knowledge-base/index.yaml"
+
+compliance:
+  certifications:
+    - "ISO 27001:2022"
+  standard_tnc_path: "legal/terms-and-conditions.md"
+  sla_template_path: "legal/sla-template.md"
+  nda_template_path: "legal/nda-template.md"
+  assumptions_boilerplate_path: "legal/assumptions.md"
+  dependencies_boilerplate_path: "legal/dependencies.md"
+
+guardrails:
+  data_handling:
+    redact_ip_addresses: true
+    redact_credentials: true
+    redact_personal_emails: true
+    redact_hostnames: false
+  must_review_before_send:
+    - "final pricing"
+    - "discount above matrix threshold"
+    - "legal terms changes"
+    - "commitment to delivery date"
+  prohibited_statements:
+    - "guaranteed performance improvement"
+    - "100% uptime"
+    - "fully automated migration with zero downtime"
+  auto_approve:
+    discount_pct_max: 5
+    bom_line_additions_max: 3
+
+learned_patterns_path: "learned-patterns.yaml"

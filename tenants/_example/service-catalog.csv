@@ -1,0 +1,10 @@
+service,default_effort_mandays,prerequisite,deliverable,notes
+Azure Landing Zone (Enterprise Scale) Setup,15,subscription + Entra ID tenant,LZ deployed + HLD,baseline for most engagements
+Hub-Spoke Network Setup,5,landing zone,Network design + deployment,include firewall SKU choice
+IaaS VM Migration (per VM),0.5,Azure Migrate assessment,Migrated VM in Azure,online via ASR/Azure Migrate
+SQL Server to SQL MI Migration,5,DMS readiness report,Migrated DB + cutover plan,per instance
+Entra ID Connect Sync Setup,3,on-prem AD assessment,Hybrid identity,
+Azure Backup Policy Setup,2,landing zone,Backup policy applied,per tier
+Azure Monitor + Log Analytics Setup,3,landing zone,Dashboards + alerts,
+Azure Site Recovery (DR) Setup,7,primary + secondary region,DR runbook + tested failover,
+POC (Azure-based),10,scope defined,POC report,time-boxed
