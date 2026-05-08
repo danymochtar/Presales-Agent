@@ -1,173 +1,92 @@
-# Presales Agent — Pilot
+# Presales Agent
 
-A self-provisioning agent framework for presales teams. Each tenant (company / presales head) configures the agent via an onboarding interview, then trains it on 1 real project (train-of-trainer), then uses skills to generate deliverables (BOM, proposal, architecture, assessment, project plan).
+Self-provisioning agent for presales teams. Generates Azure deliverables (BOM first, more to come) from inventory inputs (RVTools / Azure Migrate) using live Azure Retail Prices and Claude via Vercel AI Gateway.
 
-**Pilot target market:** Malaysia. Customer-facing billing in USD, internal reference to MYR via FX.
+**Pilot market:** Malaysia. USD billing, MYR FX reference.
 
-## What's in the repo
+This repo contains two layers:
 
-### MCP servers
+1. **Next.js web app at the repo root** — Vercel-deployable. The runnable product. See [DEPLOY.md](./DEPLOY.md).
+2. **Claude Code agent assets in `.claude/skills/`, `mcp-servers/`, `static-data-schema/`, `tenants/`** — used when running the agent locally via Claude Code (CLI). Not required for the web deployment, but kept here as the source-of-truth specs and for local power-user workflows.
 
-| Server | Purpose |
-|---|---|
-| `tenant-config` | CRUD for tenant config, rate card, service catalog, knowledge base, templates, projects, training feedback, learned patterns |
-| `inventory-parser` | RVTools / Azure Migrate / generic inventory → normalized workload schema |
-| `pricing` | Azure Retail Prices API wrapper + FX helper (USD native, MYR/IDR/SGD conversion) |
-
-### Skills
-
-| Skill | Purpose |
-|---|---|
-| `presales-onboarding` | Step 0 quick-config interview. Requires at least 1 template upload upfront. |
-| `training-project` | Train-of-trainer loop. Walks 1 real project end-to-end, collects corrections, extracts patterns, graduates the agent. |
-| `pattern-extractor` | Called by `training-project` (or standalone). Turns free-form feedback into durable rules stored in `learned-patterns.yaml`. |
-| `generate-bom` | Produces Azure BOM using tenant config + pricing MCP + workloads. Versioned during training mode. |
-
-Future (not yet in repo): generate-proposal, generate-architecture, generate-assessment, generate-project-plan, doc-render MCP, redaction MCP, market-research MCP.
-
-## Architecture
-
-```
-┌───────────────────────────────────────────────────────────────────┐
-│ Claude Code / Agent                                               │
-│                                                                   │
-│   Skills (.claude/skills/):                                       │
-│     • presales-onboarding   → setup interview + template upload   │
-│     • training-project      → train-of-trainer loop               │
-│     • pattern-extractor     → feedback → learned-patterns.yaml    │
-│     • generate-bom          → BOM via pricing MCP                 │
-│                                                                   │
-└────────────┬──────────────────────────────────────────────────────┘
-             │ MCP (stdio)
-   ┌─────────┼──────────────────────────┬─────────────────────┐
-   │         │                          │                     │
-┌──▼────────────┐  ┌────────────────────▼─┐  ┌────────────────▼─┐
-│ tenant-config │  │ inventory-parser    │  │ pricing           │
-│               │  │                     │  │                   │
-│ tenants/*     │  │ RVTools / Azure     │  │ Azure Retail API  │
-│ config + KB + │  │ Migrate / generic   │  │ + FX conversion   │
-│ templates +   │  │ → workloads JSON    │  │ (24h cache)       │
-│ projects      │  │                     │  │                   │
-└───────────────┘  └─────────────────────┘  └───────────────────┘
-```
-
-## Quick start
-
-### 1. Install MCP server dependencies
+## Quick start (web app)
 
 ```bash
-for s in tenant-config inventory-parser pricing; do
-  (cd mcp-servers/$s && uv sync)
-done
+cp .env.example .env
+# Fill: DATABASE_URL, BETTER_AUTH_SECRET, AI_GATEWAY_API_KEY, BETTER_AUTH_URL=http://localhost:3000
+
+pnpm install
+pnpm db:push
+pnpm dev          # http://localhost:3000
 ```
 
-Or with pip:
+Sign up → dashboard → create project → upload RVTools → click Generate BOM.
 
-```bash
-pip install -e mcp-servers/tenant-config
-pip install -e mcp-servers/inventory-parser
-pip install -e mcp-servers/pricing
-```
+## Deploy to Vercel
 
-### 2. Onboard your tenant
+See [DEPLOY.md](./DEPLOY.md) for full instructions. TL;DR:
 
-In Claude Code:
+1. Import repo in Vercel (no Root Directory setting needed — Next.js is at the root).
+2. Set 3 env vars: `DATABASE_URL`, `BETTER_AUTH_SECRET`, `AI_GATEWAY_API_KEY`.
+3. Deploy.
+4. Run `pnpm prisma db push` once against the prod URL to create tables.
 
-```
-/presales-onboarding
-```
+## What works in the MVP
 
-or: "set up a new tenant for Acme Cloud in Malaysia."
+- Email + password auth (Better Auth)
+- Default tenant auto-created with Malaysia defaults (USD, FX MYR 4.7, Malaysia Central + SEA, seeded rate card + service catalog)
+- Project CRUD
+- RVTools `.xlsx` upload → parsed to normalized workload schema
+- Generate BOM (streamed): server fetches live Azure Retail prices in parallel, Claude composes the BOM Markdown, persists as a versioned `Deliverable`
+- Versioned BOMs (v1, v2, v3, …)
+- Read-only settings (rate card, service catalog, learned patterns)
 
-The agent will:
-1. Create the tenant folder under `tenants/<tenant-id>/`
-2. Require you to upload at least 1 template (letterhead DOCX or proposal template)
-3. Walk through the 7 config categories with Malaysia-market defaults
-4. Seed rate card + service catalog
-5. Invite 2-3 past deliverables as knowledge samples
+## Stack
 
-### 3. Train the agent on a real project
-
-```
-/training-project
-```
-
-Pick a recent won project. The agent will:
-1. Parse your inputs (RVTools / Azure Migrate)
-2. Generate each deliverable (starting with BOM)
-3. Show it to you
-4. Take your feedback verbatim
-5. Invoke `pattern-extractor` to lift rules out of the feedback
-6. Confirm each candidate rule with you before persisting
-7. Regenerate with new rules applied
-8. Generate an Operating Model document at the end
-
-### 4. Generate BOMs for real
-
-```
-I have an RVTools export at /path/to/export.xlsx. Parse it for tenant
-acme-my, project migration-phase-1, then generate a BOM in Malaysia Central
-with southeast asia DR.
-```
-
-## The 7 static-data categories
-
-See `static-data-schema/tenant-schema.yaml` for the canonical reference.
-
-| # | Category | Update cadence |
-|---|---|---|
-| A | Identity & brand | yearly |
-| B | Commercial (rate card, catalog, margin, FX) | quarterly |
-| C | Technical standards | as-needed |
-| D | Team & capacity | monthly |
-| E | Knowledge base (past deliverables) | continuous |
-| F | Compliance & legal | yearly |
-| G | Guardrails | rarely |
-| + | Templates (DOCX/PPTX/XLSX) | rarely — required at onboarding |
-
-## Malaysia market defaults
-
-- **Billing currency:** USD (customer-facing for enterprise)
-- **FX reference:** MYR (for internal TCO + customer-facing MYR equivalents)
-- **Primary region:** Malaysia Central (for data residency, BFSI, gov)
-- **DR region:** Southeast Asia (Singapore — Malaysia Central's paired region)
-- **Tax:** SST 8%
-- **Compliance frequently relevant:** PDPA 2010, Bank Negara RMiT (BFSI), MAMPU guidelines (gov)
-
-Rate card seed: see `.claude/skills/presales-onboarding/seed-data.md` for USD daily rates at Malaysia market ballpark.
-
-## Data sensitivity
-
-- Tenant folders (`tenants/<id>/`) are **gitignored**. Only `_example/` is committed.
-- RVTools / Azure Migrate exports contain sensitive data — tenant `guardrails.data_handling` controls redaction defaults (IPs + credentials + emails redacted by default; hostnames kept since they encode useful context).
-- Pricing MCP cache (`mcp-servers/pricing/.cache/`) is gitignored.
+- Next.js 15 App Router, React 19, TypeScript
+- Prisma + PostgreSQL
+- Better Auth (email + password)
+- Tailwind + shadcn/ui primitives
+- Vercel AI SDK (`ai`) + Vercel AI Gateway (`@ai-sdk/gateway`) — Anthropic models with prompt caching + streaming
+- `xlsx` for RVTools parsing
 
 ## Repo layout
 
 ```
-presales-agent/
-├── .mcp.json                         # registers 3 MCP servers
-├── .gitignore
-├── README.md
-├── static-data-schema/
-│   └── tenant-schema.yaml            # canonical shape (7 categories + templates)
-├── .claude/skills/
-│   ├── presales-onboarding/          # SKILL.md + seed-data.md
-│   ├── training-project/             # train-of-trainer loop
-│   ├── pattern-extractor/            # feedback → rules
-│   └── generate-bom/                 # SKILL.md + sku-cheatsheet.md
-├── mcp-servers/
-│   ├── tenant-config/                # tenant + KB + templates + projects + feedback
-│   ├── inventory-parser/             # RVTools / Azure Migrate / generic
-│   └── pricing/                      # Azure Retail Prices + FX
-└── tenants/
-    └── _example/                     # Malaysia reference tenant (USD, MY Central)
-        ├── config.yaml
-        ├── rate-card.csv
-        ├── service-catalog.csv
-        ├── knowledge-base/index.yaml
-        └── learned-patterns.yaml
+.
+├── package.json               Next.js app
+├── next.config.ts
+├── tsconfig.json
+├── tailwind.config.ts
+├── prisma/schema.prisma       Database schema
+├── src/
+│   ├── app/
+│   │   ├── (app)/             Auth-gated: dashboard, projects, settings
+│   │   ├── api/               Better Auth + projects + BOM streaming + parser
+│   │   └── sign-in/
+│   ├── components/            shadcn primitives + feature components
+│   └── lib/
+│       ├── ai.ts              Vercel AI Gateway client
+│       ├── auth.ts            Better Auth server config
+│       ├── prisma.ts
+│       ├── tenant.ts          Default tenant bootstrap + Malaysia seed
+│       ├── prompts/           BOM system prompt
+│       ├── pricing/           Azure Retail + FX
+│       └── inventory/         RVTools parser, sizing recommender
+│
+├── DEPLOY.md                  Full deployment + environment setup notes
+│
+├── .claude/skills/            Claude Code skills (legacy — used by the CLI agent)
+├── mcp-servers/               Python MCP servers (legacy CLI agent)
+├── static-data-schema/        Canonical tenant schema (reference)
+└── tenants/                   Local tenant data for the CLI agent
 ```
+
+## Phases
+
+- **Phase 1 (current MVP)** — single-tenant, BOM only, read-only settings.
+- **Phase 2** — settings editing UI, training-project loop + pattern extractor, generate-proposal, DOCX export, Vercel Blob for templates.
+- **Phase 3** — multi-tenant, generate-architecture / assessment / project-plan, pipeline tracker, market-research MCP.
 
 ## Branch
 

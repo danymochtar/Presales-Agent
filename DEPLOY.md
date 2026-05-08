@@ -34,35 +34,39 @@ Vercel-deployable Next.js 15 app. Single-tenant for MVP. Generates Azure BOMs fr
 ## Local setup
 
 ```bash
-cd web
 cp .env.example .env
 # Fill: DATABASE_URL, BETTER_AUTH_SECRET (openssl rand -base64 32),
 #       AI_GATEWAY_API_KEY, BETTER_AUTH_URL=http://localhost:3000
 
-pnpm install      # or npm install
+pnpm install
 pnpm db:push      # creates tables
 pnpm dev          # http://localhost:3000
 ```
 
-Sign up → land on dashboard → create project → upload RVTools → click "Generate BOM".
+Sign up → dashboard → create project → upload RVTools → click "Generate BOM".
 
 ## Deploy to Vercel
 
 1. Push to GitHub (branch: `claude/presales-agent-pilot-qDBpJ`).
-2. Vercel → Import Project → **Root directory: `web/`**.
-3. Database: provision Postgres (Vercel Postgres / Neon / external host). DATABASE_URL is the only DB var needed.
+2. Vercel → Import Project. **Leave Root Directory at default (`./`)** — Next.js is at the repo root now, no Root Directory override needed.
+3. Database: provision Postgres (Vercel Postgres / Neon / external host). `DATABASE_URL` is the only DB var needed.
 4. Env vars to set in Vercel dashboard:
-   - `DATABASE_URL` — full Postgres connection string
+   - `DATABASE_URL` — full Postgres connection string. For external hosts, append `?sslmode=require` if SSL is required.
    - `BETTER_AUTH_SECRET` — `openssl rand -base64 32`
    - `AI_GATEWAY_API_KEY` — Vercel AI Gateway key (Vercel → AI → API Keys)
    - `BETTER_AUTH_URL` — **leave unset on Vercel**; auto-detected from `VERCEL_PROJECT_PRODUCTION_URL` / `VERCEL_URL`
    - `AI_MODEL` — optional, defaults to `anthropic/claude-sonnet-4.5`
-5. After first deploy, push schema once from local:
+5. After first successful deploy, push schema once from local:
    ```bash
-   cd web
    DATABASE_URL="<prod-url>" pnpm prisma db push
    ```
 6. Visit your domain → sign up → use.
+
+### If a previous Vercel project was set with Root Directory = `web/`
+
+The directory no longer exists. Either:
+- Update Root Directory back to `./` (or empty) in Project Settings → General, then redeploy, **or**
+- Delete the Vercel project and re-import (cleaner — picks up the new root layout automatically).
 
 ## Vercel free tier constraints (verified)
 
@@ -81,15 +85,15 @@ User → Next.js page (server component) → Prisma → Neon Postgres
                   ↓
     1. Load tenant + workloads from DB
     2. batchVmPrices() → Azure Retail API (parallel, cached)
-    3. anthropic.messages.stream() with system prompt (cached) + user prompt
+    3. streamText() via Vercel AI Gateway with system prompt (cached) + user prompt
     4. Stream SSE deltas → client renders live
     5. On done, save Deliverable row
 ```
 
-## Folder layout
+## Folder layout (web app — repo root)
 
 ```
-web/
+.
 ├── prisma/schema.prisma           Database schema (Better Auth + tenant + project + bom)
 ├── src/
 │   ├── app/
@@ -105,7 +109,7 @@ web/
 │   │   ├── prisma.ts
 │   │   ├── auth.ts                 Better Auth server config
 │   │   ├── auth-client.ts          Better Auth client hooks
-│   │   ├── anthropic.ts
+│   │   ├── ai.ts                   Vercel AI Gateway client
 │   │   ├── tenant.ts               Default tenant bootstrap + seed
 │   │   ├── prompts/generate-bom.ts BOM system prompt (long, cached)
 │   │   ├── pricing/azure.ts        Azure Retail Prices API client
@@ -116,7 +120,7 @@ web/
 │       ├── bom-workspace.tsx       BOM streaming UI
 │       ├── upload-input-form.tsx   RVTools upload form
 │       └── sign-out-button.tsx
-└── README.md (this file)
+└── (legacy Claude Code agent assets: .claude/, mcp-servers/, static-data-schema/, tenants/)
 ```
 
 ## Next steps after MVP ships
