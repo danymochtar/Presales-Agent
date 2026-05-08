@@ -41,6 +41,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   const assessments = byType("assessment");
   const tcos = byType("tco");
   const projectPlans = byType("project_plan");
+  const sows = byType("sow");
+  const msOfferings = byType("ms_offering");
   const latestInput = project.inputs[0];
   const hasBom = boms.length > 0;
   const hasInput = !!latestInput;
@@ -55,6 +57,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     tco: "tco",
     project_plan: "project-plan",
     proposal: "proposal",
+    sow: "sow",
+    ms_offering: "ms-offering",
   };
   const existingByStage: Record<string, string[]> = {};
   for (const d of project.deliverables) {
@@ -97,6 +101,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           <Button asChild variant={hasBom ? "outline" : "ghost"} size="sm"><Link href={`/projects/${project.id}/tco`}>TCO</Link></Button>
           <Button asChild variant="outline" size="sm"><Link href={`/projects/${project.id}/project-plan`}>Project plan</Link></Button>
           <Button asChild variant={hasBom ? "outline" : "ghost"} size="sm"><Link href={`/projects/${project.id}/proposal`}>Proposal</Link></Button>
+          <Button asChild variant={hasBom ? "outline" : "ghost"} size="sm"><Link href={`/projects/${project.id}/sow`}>SOW</Link></Button>
+          <Button asChild variant={hasBom ? "outline" : "ghost"} size="sm"><Link href={`/projects/${project.id}/ms-offering`}>Managed services</Link></Button>
         </div>
       </div>
 
@@ -195,6 +201,20 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           basePath={`/projects/${project.id}/proposal`}
           showCloud
           emptyMsg={hasBom ? "Compose proposal from BOM" : "BOM first"}
+        />
+        <DeliverableCard
+          title="SOW"
+          items={sows}
+          basePath={`/projects/${project.id}/sow`}
+          showCloud
+          emptyMsg={hasBom ? "Legal-grade scope (post-decision)" : "BOM first"}
+        />
+        <DeliverableCard
+          title="Managed services"
+          items={msOfferings}
+          basePath={`/projects/${project.id}/ms-offering`}
+          showCloud
+          emptyMsg={hasBom ? "Run/operate offering for post-handover" : "BOM first"}
         />
       </div>
 

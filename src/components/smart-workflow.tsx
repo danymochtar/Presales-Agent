@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
-type StageId = "assessment" | "architecture" | "bom" | "tco" | "project-plan" | "proposal";
+type StageId = "assessment" | "architecture" | "bom" | "tco" | "project-plan" | "proposal" | "sow" | "ms-offering";
 
 const STAGES: Record<StageId, { label: string; pathFor: (pid: string, cloud: string) => string }> = {
   assessment:    { label: "Assessment",   pathFor: (p, c) => `/api/projects/${p}/assessment/generate?cloud=${c}` },
@@ -12,6 +12,8 @@ const STAGES: Record<StageId, { label: string; pathFor: (pid: string, cloud: str
   tco:           { label: "TCO",          pathFor: (p, c) => `/api/projects/${p}/tco/generate?cloud=${c}` },
   "project-plan":{ label: "Project plan", pathFor: (p, c) => `/api/projects/${p}/project-plan/generate?cloud=${c}` },
   proposal:      { label: "Proposal",     pathFor: (p, c) => `/api/projects/${p}/proposal/generate?cloud=${c}` },
+  sow:           { label: "SOW",          pathFor: (p, c) => `/api/projects/${p}/sow/generate?cloud=${c === "compare" ? "azure" : c}` },
+  "ms-offering": { label: "Managed services", pathFor: (p, c) => `/api/projects/${p}/ms-offering/generate?cloud=${c}` },
 };
 
 const PROJECT_TYPE_LABELS: Record<string, string> = {
