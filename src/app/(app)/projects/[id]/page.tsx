@@ -39,6 +39,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   const architectures = byType("architecture");
   const assessments = byType("assessment");
   const tcos = byType("tco");
+  const projectPlans = byType("project_plan");
   const latestInput = project.inputs[0];
   const hasBom = boms.length > 0;
   const hasInput = !!latestInput;
@@ -73,6 +74,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           <Button asChild variant="outline" size="sm"><Link href={`/projects/${project.id}/architecture`}>Architecture</Link></Button>
           <Button asChild variant="outline" size="sm"><Link href={`/projects/${project.id}/bom`}>BOM</Link></Button>
           <Button asChild variant={hasBom ? "outline" : "ghost"} size="sm"><Link href={`/projects/${project.id}/tco`}>TCO</Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href={`/projects/${project.id}/project-plan`}>Project plan</Link></Button>
           <Button asChild variant={hasBom ? "outline" : "ghost"} size="sm"><Link href={`/projects/${project.id}/proposal`}>Proposal</Link></Button>
         </div>
       </div>
@@ -107,7 +109,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <DeliverableCard
           title="Assessment"
           items={assessments}
@@ -135,6 +137,13 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           basePath={`/projects/${project.id}/tco`}
           showCloud
           emptyMsg={hasBom ? "3-5 year scenarios from BOM" : "BOM first"}
+        />
+        <DeliverableCard
+          title="Project plan"
+          items={projectPlans}
+          basePath={`/projects/${project.id}/project-plan`}
+          showCloud
+          emptyMsg="Phased rollout + Gantt"
         />
         <DeliverableCard
           title="Proposal"
