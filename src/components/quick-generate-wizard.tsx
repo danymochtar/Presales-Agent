@@ -8,36 +8,16 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import {
   DELIVERABLE_PREREQS,
   DELIVERABLES_IN_LIFECYCLE_ORDER,
+  GROUP_LABELS,
+  NEED_LABELS,
   type DeliverableKind,
+  type Group,
 } from "@/lib/deliverable-prereqs";
-import { listRegionsForCloud, MARKET_DEFAULT_REGIONS } from "@/lib/pricing/regions";
-import { PURCHASE_MODEL_LABELS, type Term, type CloudType } from "@/lib/pricing/types";
-
-const CLOUDS: { id: CloudType; label: string; available: boolean }[] = [
-  { id: "azure", label: "Azure", available: true },
-  { id: "aws",   label: "AWS",   available: true },
-  { id: "gcp",   label: "GCP",   available: false },
-];
-
-const PURCHASE_MODELS: Term[] = ["consumption", "reserved-1y", "reserved-3y", "savings-1y", "savings-3y"];
-
-const GROUP_LABELS: Record<string, string> = {
-  discover: "Discover",
-  design: "Design",
-  commercial: "Commercial",
-  delivery: "Delivery",
-};
-
-type ParsedFile = {
-  filename: string;
-  contentType: string;
-  kind: string;
-  rawSummary: string;
-  textContent?: string;
-  workloads?: { source: string; workloads: unknown[]; totals: { count: number; cpu: number; ramGb: number; storageGb: number; osMix: Record<string, number> } };
-  truncated: boolean;
-  warnings: string[];
-};
+import { MARKET_DEFAULT_REGIONS } from "@/lib/pricing/regions";
+import { type Term, type CloudType } from "@/lib/pricing/types";
+import { useFileParser } from "@/lib/use-file-parser";
+import { streamGenerate } from "@/lib/sse-stream";
+import { CloudTogglePicker, RegionPickerPerCloud, PurchaseModelPicker } from "@/components/cloud-region-pickers";
 
 type Step = "pick" | "fill" | "running";
 
@@ -46,12 +26,10 @@ export function QuickGenerateWizard() {
   const [step, setStep] = useState<Step>("pick");
   const [kind, setKind] = useState<DeliverableKind | null>(null);
 
-  // Form state — only the bits this deliverable needs are rendered.
   const [customer, setCustomer] = useState("");
   const [industry, setIndustry] = useState("");
   const [scope, setScope] = useState("");
-  const [parsedFiles, setParsedFiles] = useState<ParsedFile[]>([]);
-  const [uploading, setUploading] = useState(false);
+  const { parsedFiles, uploading, err: parseErr, uploadFiles, setErr: setParseErr } = useFileParser();
   const [targetClouds, setTargetClouds] = useState<CloudType[]>(["azure"]);
   const [cloudRegions, setCloudRegions] = useState<Record<string, { primary: string; dr: string }>>({
     azure: { ...MARKET_DEFAULT_REGIONS.azure },
@@ -60,15 +38,15 @@ export function QuickGenerateWizard() {
   const [onPremBaseline, setOnPremBaseline] = useState("");
 
   const [runText, setRunText] = useState("");
-  const [err, setErr] = useState<string | null>(null);
+  const [runErr, setRunErr] = useState<string | null>(null);
+  const err = runErr ?? parseErr;
+  const setErr = (v: string | null) => { setParseErr(v); setRunErr(v); };
 
   const prereqs = kind ? DELIVERABLE_PREREQS[kind] : null;
 
   const grouped = useMemo(() => {
-    const out: Record<string, DeliverableKind[]> = { discover: [], design: [], commercial: [], delivery: [] };
-    for (const k of DELIVERABLES_IN_LIFECYCLE_ORDER) {
-      out[DELIVERABLE_PREREQS[k].group].push(k);
-    }
+    const out: Record<Group, DeliverableKind[]> = { discover: [], design: [], commercial: [], delivery: [] };
+    for (const k of DELIVERABLES_IN_LIFECYCLE_ORDER) out[DELIVERABLE_PREREQS[k].group].push(k);
     return out;
   }, []);
 
@@ -78,43 +56,24 @@ export function QuickGenerateWizard() {
     setStep("fill");
   }
 
-  async function uploadFile(file: File) {
-    setErr(null);
-    setUploading(true);
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch("/api/projects/extract/parse", { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : "parse failed");
-      setParsedFiles((p) => [...p, data]);
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "upload failed");
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  async function onFileChange(files: FileList | null) {
-    if (!files) return;
-    for (const file of Array.from(files)) await uploadFile(file);
-  }
-
   function toggleCloud(id: CloudType) {
-    if (targetClouds.includes(id)) {
-      if (targetClouds.length === 1) return;
-      setTargetClouds(targetClouds.filter((c) => c !== id));
-      const next = { ...cloudRegions };
-      delete next[id];
-      setCloudRegions(next);
-    } else {
-      setTargetClouds([...targetClouds, id]);
-      setCloudRegions({ ...cloudRegions, [id]: { ...MARKET_DEFAULT_REGIONS[id] } });
-    }
+    setTargetClouds((cs) => {
+      if (cs.includes(id)) return cs.length === 1 ? cs : cs.filter((c) => c !== id);
+      return [...cs, id];
+    });
+    setCloudRegions((r) => {
+      if (r[id]) {
+        if (Object.keys(r).length === 1) return r;
+        const next = { ...r };
+        delete next[id];
+        return next;
+      }
+      return { ...r, [id]: { ...MARKET_DEFAULT_REGIONS[id] } };
+    });
   }
 
-  function setRegion(c: string, k: "primary" | "dr", v: string) {
-    setCloudRegions({ ...cloudRegions, [c]: { ...cloudRegions[c], [k]: v } });
+  function setRegion(c: CloudType, k: "primary" | "dr", v: string) {
+    setCloudRegions((r) => ({ ...r, [c]: { ...r[c], [k]: v } }));
   }
 
   function validate(): string | null {
@@ -138,9 +97,6 @@ export function QuickGenerateWizard() {
     setRunText("");
 
     try {
-      // 1. Create a Quick project so generate routes have a project.id to write
-      //    deliverables against. Keeps audit trail; user can revisit later.
-      const projectName = `Quick: ${prereqs.label} · ${new Date().toLocaleDateString()}`;
       const inputs = parsedFiles.map((f) => ({
         kind: f.kind,
         filename: f.filename,
@@ -148,7 +104,7 @@ export function QuickGenerateWizard() {
         textContent: f.textContent,
         workloadsJson: f.workloads,
       }));
-      const cloudsForProject = prereqs.needs.clouds ? targetClouds : ["azure" as CloudType];
+      const cloudsForProject: CloudType[] = prereqs.needs.clouds ? targetClouds : ["azure"];
       const regionsForProject = prereqs.needs.regions
         ? cloudRegions
         : { azure: { ...MARKET_DEFAULT_REGIONS.azure } };
@@ -157,7 +113,7 @@ export function QuickGenerateWizard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: projectName,
+          name: `Quick: ${prereqs.label} · ${new Date().toLocaleDateString()}`,
           customer: customer || "(quick)",
           industry: industry || undefined,
           scopeSummary: scope || onPremBaseline || undefined,
@@ -171,40 +127,11 @@ export function QuickGenerateWizard() {
       if (!createRes.ok) throw new Error(typeof createData.error === "string" ? createData.error : "could not create project");
       const projectId = createData.project.id as string;
 
-      // 2. Stream the chosen deliverable. Cloud query param uses the first
-      //    target cloud (or "azure" for cloud-agnostic deliverables).
-      const cloudQS = prereqs.needs.clouds ? cloudsForProject[0] : "azure";
-      const path = `/api/projects/${projectId}/${kind}/generate?cloud=${cloudQS}`;
-      const res = await fetch(path, { method: "POST" });
-      if (!res.ok || !res.body) {
-        const txt = await res.text().catch(() => "");
-        throw new Error(txt || `${res.status} ${res.statusText}`);
-      }
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = "";
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const events = buf.split("\n\n");
-        buf = events.pop() ?? "";
-        for (const ev of events) {
-          const line = ev.split("\n").find((l) => l.startsWith("data: "));
-          if (!line) continue;
-          try {
-            const payload = JSON.parse(line.slice(6));
-            if (typeof payload.delta === "string") setRunText((t) => t + payload.delta);
-            if (payload.done) {
-              router.push(`/projects/${projectId}/${kind}`);
-              return;
-            }
-            if (payload.error) throw new Error(payload.error);
-          } catch (e) {
-            if (e instanceof Error && e.message && !e.message.startsWith("Unexpected token")) throw e;
-          }
-        }
-      }
+      const cloudQS: CloudType = cloudsForProject[0];
+      await streamGenerate(`/api/projects/${projectId}/${kind}/generate?cloud=${cloudQS}`, {
+        onDelta: (d) => setRunText((t) => t + d),
+        onDone: () => router.push(`/projects/${projectId}/${kind}`),
+      });
     } catch (e) {
       setErr(e instanceof Error ? e.message : "generate failed");
       setStep("fill");
@@ -227,14 +154,9 @@ export function QuickGenerateWizard() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {grouped[g].map((k) => {
                   const p = DELIVERABLE_PREREQS[k];
-                  const needs: string[] = [];
-                  if (p.needs.customer) needs.push("customer");
-                  if (p.needs.scope) needs.push("scope");
-                  if (p.needs.inventory) needs.push("inventory");
-                  if (p.needs.clouds) needs.push("cloud");
-                  if (p.needs.regions) needs.push("region");
-                  if (p.needs.purchaseModel) needs.push("purchase model");
-                  if (p.needs.onPremBaseline) needs.push("on-prem baseline");
+                  const needs = (Object.keys(NEED_LABELS) as (keyof typeof p.needs)[])
+                    .filter((n) => p.needs[n])
+                    .map((n) => NEED_LABELS[n]);
                   return (
                     <button
                       key={k}
@@ -320,7 +242,7 @@ export function QuickGenerateWizard() {
               type="file"
               multiple
               accept=".xlsx,.xls,.docx,.pdf,.txt,.md,.csv"
-              onChange={(e) => onFileChange(e.target.files)}
+              onChange={(e) => uploadFiles(e.target.files)}
               disabled={uploading}
               className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-1.5 file:text-sm file:font-medium hover:file:bg-secondary/80"
             />
@@ -342,86 +264,22 @@ export function QuickGenerateWizard() {
         {prereqs.needs.clouds && (
           <div className="space-y-2">
             <Label>Target cloud(s)</Label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              {CLOUDS.map((c) => {
-                const checked = targetClouds.includes(c.id);
-                return (
-                  <button
-                    type="button"
-                    key={c.id}
-                    onClick={() => c.available && toggleCloud(c.id)}
-                    disabled={!c.available}
-                    className={`text-left rounded-md border p-3 text-sm transition ${
-                      checked ? "bg-primary/10 border-primary" : "hover:bg-accent"
-                    } ${!c.available ? "opacity-40 cursor-not-allowed" : ""}`}
-                  >
-                    <div className="font-medium flex items-center gap-2">
-                      <span>{checked ? "☑" : "☐"}</span> {c.label}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+            <CloudTogglePicker selected={targetClouds} onToggle={toggleCloud} />
           </div>
         )}
 
-        {prereqs.needs.regions && targetClouds.map((cloudId) => {
-          const regions = listRegionsForCloud(cloudId);
-          const recommended = regions.filter((r) => r.recommended);
-          const other = regions.filter((r) => !r.recommended);
-          return (
-            <div key={cloudId} className="space-y-2 border rounded-md p-3 bg-accent/30">
-              <div className="text-sm font-medium">{cloudId.toUpperCase()} regions</div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {(["primary", "dr"] as const).map((kindRegion) => (
-                  <div key={kindRegion} className="space-y-1.5">
-                    <Label htmlFor={`${cloudId}-${kindRegion}`} className="text-xs">{kindRegion === "primary" ? "Primary" : "DR"}</Label>
-                    <select
-                      id={`${cloudId}-${kindRegion}`}
-                      value={cloudRegions[cloudId]?.[kindRegion] ?? ""}
-                      onChange={(e) => setRegion(cloudId, kindRegion, e.target.value)}
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                    >
-                      {recommended.length > 0 && (
-                        <optgroup label="Recommended (Malaysia / SEA)">
-                          {recommended.map((r) => (
-                            <option key={r.code} value={r.code}>{r.label} — {r.location}</option>
-                          ))}
-                        </optgroup>
-                      )}
-                      <optgroup label="Other regions">
-                        {other.map((r) => (
-                          <option key={r.code} value={r.code}>{r.label} — {r.location}</option>
-                        ))}
-                      </optgroup>
-                    </select>
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        })}
+        {prereqs.needs.regions && (
+          <RegionPickerPerCloud
+            targetClouds={targetClouds}
+            cloudRegions={cloudRegions}
+            onChange={setRegion}
+          />
+        )}
 
         {prereqs.needs.purchaseModel && (
           <div className="space-y-2">
             <Label>Purchase model</Label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-              {PURCHASE_MODELS.map((m) => {
-                const active = purchaseModel === m;
-                return (
-                  <button
-                    type="button"
-                    key={m}
-                    onClick={() => setPurchaseModel(m)}
-                    className={`text-left rounded-md border p-2 text-sm transition ${
-                      active ? "bg-primary/10 border-primary" : "hover:bg-accent"
-                    }`}
-                  >
-                    <span className="font-medium">{active ? "● " : "○ "}{PURCHASE_MODEL_LABELS[m]}</span>
-                  </button>
-                );
-              })}
-            </div>
+            <PurchaseModelPicker value={purchaseModel} onChange={setPurchaseModel} />
           </div>
         )}
 

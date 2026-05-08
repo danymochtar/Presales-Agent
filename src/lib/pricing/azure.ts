@@ -75,15 +75,18 @@ export async function getVmPrice(
   osType: "linux" | "windows" = "linux",
   term: Term = "consumption",
 ): Promise<VmPriceResult> {
-  // Azure Savings Plan rates aren't returned by the Retail Prices API; we
-  // price them as a small uplift over the equivalent RI (Compute SP gives
-  // most of RI's discount with VM-family flexibility — typical effective
-  // uplift ~3-5%).
+  // Savings Plan rates aren't returned by the Retail Prices API; we price
+  // them off the equivalent RI rate with a 4% uplift (Compute SP keeps
+  // most of RI's discount with VM-family flexibility).
+  const TERM_API: Record<Term, "consumption" | "reserved-1y" | "reserved-3y"> = {
+    "consumption": "consumption",
+    "reserved-1y": "reserved-1y",
+    "reserved-3y": "reserved-3y",
+    "savings-1y":  "reserved-1y",
+    "savings-3y":  "reserved-3y",
+  };
+  const apiTerm = TERM_API[term];
   const isSavings = term === "savings-1y" || term === "savings-3y";
-  const apiTerm: "consumption" | "reserved-1y" | "reserved-3y" =
-    term === "consumption" ? "consumption"
-    : term === "reserved-1y" || term === "savings-1y" ? "reserved-1y"
-    : "reserved-3y";
 
   const baseFilter = [
     "serviceName eq 'Virtual Machines'",

@@ -73,9 +73,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   }
 
   const fxRate = fxRateOrFallback("MYR", project.tenant.fxMyrPerUsd);
-  const pricingByCloud: Record<string, unknown> = {};
 
-  for (const cloud of cloudsToPrice) {
+  const cloudEntries = await Promise.all(cloudsToPrice.map(async (cloud) => {
     const labelPrimary = cloudRegions[cloud]?.primary;
     const region = pricingRegion(cloud, labelPrimary);
     const sizedWorkloads: Workload[] = workloadSet.workloads.map((w) => ({
@@ -91,7 +90,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       winSkus.length ? batchPriceCompute(cloud, winSkus, region, "windows", purchaseModel) : Promise.resolve({}),
     ]);
 
-    pricingByCloud[cloud] = {
+    return [cloud, {
       regionLabel: labelPrimary ?? PRICING_REGION_DEFAULTS[cloud].primary,
       regionPricingId: region,
       drRegion: cloudRegions[cloud]?.dr ?? PRICING_REGION_DEFAULTS[cloud].dr,
@@ -99,8 +98,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       purchaseModelLabel: PURCHASE_MODEL_LABELS[purchaseModel],
       sizedWorkloads,
       prices: { linux: linuxPrices, windows: winPrices },
-    };
-  }
+    }] as const;
+  }));
+  const pricingByCloud: Record<string, unknown> = Object.fromEntries(cloudEntries);
 
   const tenantContext = {
     tenant: {

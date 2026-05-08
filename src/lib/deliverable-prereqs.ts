@@ -24,26 +24,92 @@ export type DeliverableKind =
   | "sow"
   | "ms-offering";
 
+export type ProjectType =
+  | "migration"
+  | "greenfield"
+  | "modernization"
+  | "dr"
+  | "poc"
+  | "optimization"
+  | "unknown";
+
+export type Group = "discover" | "design" | "commercial" | "delivery";
+
 export type Prereqs = {
   kind: DeliverableKind;
   label: string;
   shortDesc: string;
-  /** Lifecycle bucket — same grouping used on project detail. */
-  group: "discover" | "design" | "commercial" | "delivery";
+  group: Group;
   needs: {
-    customer: boolean;       // customer name + industry
-    scope: boolean;          // scope summary textarea
-    inventory: boolean;      // RVTools / Azure Migrate / CSV upload
-    clouds: boolean;         // target cloud(s) checkboxes
-    regions: boolean;        // primary + DR per cloud
-    purchaseModel: boolean;  // PAYG / RI / Savings Plan
-    onPremBaseline: boolean; // for TCO comparisons
+    customer: boolean;
+    scope: boolean;
+    inventory: boolean;
+    clouds: boolean;
+    regions: boolean;
+    purchaseModel: boolean;
+    onPremBaseline: boolean;
   };
-  /** Upstream deliverables that materially improve output (informational). */
   recommendedUpstream: DeliverableKind[];
-  /** Hard prereqs enforced by the generate route — block the Quick flow. */
   hardUpstream: DeliverableKind[];
 };
+
+export const GROUP_LABELS: Record<Group, string> = {
+  discover: "Discover",
+  design: "Design",
+  commercial: "Commercial",
+  delivery: "Delivery",
+};
+
+const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {
+  migration: "Migration",
+  greenfield: "Greenfield (new build)",
+  modernization: "Modernization",
+  dr: "DR / Resilience",
+  poc: "POC / Pilot",
+  optimization: "Optimization / FinOps",
+  unknown: "Unclear (review needed)",
+};
+
+export function projectTypeLabel(t: string | null | undefined): string {
+  if (!t) return PROJECT_TYPE_LABELS.unknown;
+  return PROJECT_TYPE_LABELS[t as ProjectType] ?? t;
+}
+
+export const NEED_LABELS: Record<keyof Prereqs["needs"], string> = {
+  customer: "customer",
+  scope: "scope",
+  inventory: "inventory",
+  clouds: "cloud",
+  regions: "region",
+  purchaseModel: "purchase model",
+  onPremBaseline: "on-prem baseline",
+};
+
+// DB-side enum (what Deliverable.type stores) ↔ wizard kind. The DB uses
+// snake_case for historical reasons; the rest of the app uses kebab.
+const DB_TYPE_BY_KIND: Record<DeliverableKind, string> = {
+  "customer-study": "customer_study",
+  "assessment": "assessment",
+  "architecture": "architecture",
+  "bom": "bom",
+  "tco": "tco",
+  "project-plan": "project_plan",
+  "proposal": "proposal",
+  "sow": "sow",
+  "ms-offering": "ms_offering",
+};
+
+const KIND_BY_DB_TYPE: Record<string, DeliverableKind> = Object.fromEntries(
+  Object.entries(DB_TYPE_BY_KIND).map(([k, v]) => [v, k as DeliverableKind]),
+);
+
+export function dbTypeOf(kind: DeliverableKind): string {
+  return DB_TYPE_BY_KIND[kind];
+}
+
+export function kindOfDbType(dbType: string): DeliverableKind | undefined {
+  return KIND_BY_DB_TYPE[dbType];
+}
 
 export const DELIVERABLE_PREREQS: Record<DeliverableKind, Prereqs> = {
   "customer-study": {

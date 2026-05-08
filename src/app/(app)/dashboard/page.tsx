@@ -7,43 +7,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CloudChip } from "@/components/cloud-chip";
 
-const PROJECT_TYPE_LABELS: Record<string, string> = {
-  migration: "Migration",
-  greenfield: "Greenfield",
-  modernization: "Modernization",
-  dr: "DR / Resilience",
-  poc: "POC / Pilot",
-  optimization: "Optimization",
-  unknown: "—",
-};
-
-const DELIVERABLE_LABELS: Record<string, string> = {
-  bom: "BOM",
-  proposal: "Proposal",
-  architecture: "Architecture",
-  assessment: "Assessment",
-  project_plan: "Project plan",
-  tco: "TCO",
-};
+import { projectTypeLabel, DELIVERABLE_PREREQS, kindOfDbType } from "@/lib/deliverable-prereqs";
+import { relTime } from "@/lib/format-time";
 
 const STAGE_TYPES = ["assessment", "architecture", "bom", "tco", "project_plan", "proposal"];
 
-const CLOUD_LABELS: Record<string, string> = {
-  azure: "Azure", aws: "AWS", gcp: "GCP", compare: "Compare", multi: "Multi",
+const deliverableLabel = (dbType: string): string => {
+  const k = kindOfDbType(dbType);
+  return k ? DELIVERABLE_PREREQS[k].label : dbType;
 };
-
-function relTime(date: Date | string): string {
-  const ts = new Date(date).getTime();
-  const diff = Date.now() - ts;
-  const m = Math.floor(diff / 60_000);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  if (d < 7) return `${d}d ago`;
-  return new Date(date).toLocaleDateString();
-}
 
 export default async function DashboardPage() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -192,7 +164,7 @@ export default async function DashboardPage() {
                             {project.industry && ` · ${project.industry}`}
                             {project.customerSegment && ` · ${project.customerSegment}`}
                             {project.projectType && project.projectType !== "unknown" && (
-                              <span className="ml-1 text-foreground">· {PROJECT_TYPE_LABELS[project.projectType]}</span>
+                              <span className="ml-1 text-foreground">· {projectTypeLabel(project.projectType)}</span>
                             )}
                           </p>
                           <div className="flex items-center gap-3 mt-2 flex-wrap">
@@ -233,7 +205,7 @@ export default async function DashboardPage() {
                   <li key={`${d.project.id}-${d.type}-${i}`} className="flex justify-between gap-3">
                     <span className="min-w-0">
                       <span className="text-muted-foreground">Generated </span>
-                      <span className="font-medium">{DELIVERABLE_LABELS[d.type] ?? d.type}</span>
+                      <span className="font-medium">{deliverableLabel(d.type)}</span>
                       {d.cloudProvider && (
                         <span className="ml-1.5 inline-block align-middle">
                           <CloudChip cloud={d.cloudProvider} size="xs" />

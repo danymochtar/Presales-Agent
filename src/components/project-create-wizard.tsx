@@ -5,41 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { listRegionsForCloud, MARKET_DEFAULT_REGIONS } from "@/lib/pricing/regions";
-import { PURCHASE_MODEL_LABELS, type Term } from "@/lib/pricing/types";
-import type { CloudType } from "@/lib/pricing/types";
-
-const CLOUDS: { id: CloudType; label: string; available: boolean; note?: string }[] = [
-  { id: "azure", label: "Azure", available: true },
-  { id: "aws",   label: "AWS",   available: true },
-  { id: "gcp",   label: "GCP",   available: false, note: "Pricing integration deferred" },
-];
-
-const PURCHASE_MODELS: Term[] = ["consumption", "reserved-1y", "reserved-3y", "savings-1y", "savings-3y"];
-
-const PURCHASE_MODEL_HINTS: Record<Term, string> = {
-  "consumption": "Pay per hour. Maximum flexibility, no commitment.",
-  "reserved-1y": "1-year commitment. ~30-40% off PAYG. SKU-locked.",
-  "reserved-3y": "3-year commitment. ~50-60% off PAYG. SKU-locked.",
-  "savings-1y":  "1-year $/hour commitment. ~25-35% off PAYG. Cross-family flexibility.",
-  "savings-3y":  "3-year $/hour commitment. ~45-55% off PAYG. Cross-family flexibility.",
-};
-
-type ParsedFile = {
-  filename: string;
-  contentType: string;
-  kind: string;
-  rawSummary: string;
-  textContent?: string;
-  workloads?: { source: string; workloads: unknown[]; totals: { count: number; cpu: number; ramGb: number; storageGb: number; osMix: Record<string, number> } };
-  truncated: boolean;
-  warnings: string[];
-};
+import { MARKET_DEFAULT_REGIONS, normalizeRegionLabel } from "@/lib/pricing/regions";
+import { PURCHASE_MODEL_LABELS, type Term, type CloudType } from "@/lib/pricing/types";
+import { projectTypeLabel, type ProjectType, type DeliverableKind, DELIVERABLE_PREREQS } from "@/lib/deliverable-prereqs";
+import { useFileParser } from "@/lib/use-file-parser";
+import { CloudTogglePicker, RegionPickerPerCloud, PurchaseModelPicker } from "@/components/cloud-region-pickers";
 
 type Confidence = "high" | "medium" | "low";
-
-type ProjectType = "migration" | "greenfield" | "modernization" | "dr" | "poc" | "optimization" | "unknown";
-type Stage = "assessment" | "architecture" | "bom" | "tco" | "project-plan" | "proposal";
 
 type Extracted = {
   projectName: string;
@@ -53,7 +25,7 @@ type Extracted = {
   constraints: string[];
   projectType: ProjectType;
   projectTypeRationale: string;
-  suggestedDeliverables: Stage[];
+  suggestedDeliverables: DeliverableKind[];
   confidence: {
     customer: Confidence;
     industry: Confidence;
@@ -63,25 +35,6 @@ type Extracted = {
     cloudRegions: Confidence;
     projectType: Confidence;
   };
-};
-
-const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {
-  migration: "Migration",
-  greenfield: "Greenfield (new build)",
-  modernization: "Modernization",
-  dr: "DR / Resilience",
-  poc: "POC / Pilot",
-  optimization: "Optimization / FinOps",
-  unknown: "Unclear (review needed)",
-};
-
-const STAGE_LABELS: Record<Stage, string> = {
-  assessment: "Assessment",
-  architecture: "Architecture",
-  bom: "BOM",
-  tco: "TCO",
-  "project-plan": "Project plan",
-  proposal: "Proposal",
 };
 
 type Step = "upload" | "review" | "submitting";
@@ -95,13 +48,13 @@ const CONFIDENCE_CHIP: Record<Confidence, string> = {
 export function ProjectCreateWizard() {
   const router = useRouter();
   const [step, setStep] = useState<Step>("upload");
-  const [parsedFiles, setParsedFiles] = useState<ParsedFile[]>([]);
-  const [uploading, setUploading] = useState(false);
+  const { parsedFiles, uploading, err: parseErr, uploadFiles, removeFile, setErr: setParseErr } = useFileParser();
   const [extracting, setExtracting] = useState(false);
   const [extracted, setExtracted] = useState<Extracted | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [submitErr, setSubmitErr] = useState<string | null>(null);
+  const err = parseErr ?? submitErr;
+  const setErr = (v: string | null) => { setParseErr(v); setSubmitErr(v); };
 
-  // Review step form state
   const [form, setForm] = useState({
     name: "",
     customer: "",
@@ -115,34 +68,6 @@ export function ProjectCreateWizard() {
     aws:   { ...MARKET_DEFAULT_REGIONS.aws },
   });
   const [purchaseModel, setPurchaseModel] = useState<Term>("consumption");
-
-  async function uploadFile(file: File) {
-    setErr(null);
-    setUploading(true);
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch("/api/projects/extract/parse", { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : "parse failed");
-      setParsedFiles((p) => [...p, data]);
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "upload failed");
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  async function onFileChange(files: FileList | null) {
-    if (!files) return;
-    for (const file of Array.from(files)) {
-      await uploadFile(file);
-    }
-  }
-
-  function removeFile(idx: number) {
-    setParsedFiles(parsedFiles.filter((_, i) => i !== idx));
-  }
 
   async function runExtraction() {
     if (parsedFiles.length === 0) {
@@ -169,7 +94,6 @@ export function ProjectCreateWizard() {
       if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : "extraction failed");
       const ext = data.extracted as Extracted;
       setExtracted(ext);
-      // Pre-fill form
       setForm({
         name: ext.projectName || "",
         customer: ext.customer ?? "",
@@ -177,23 +101,15 @@ export function ProjectCreateWizard() {
         customerSegment: ext.customerSegment ?? "",
         scopeSummary: ext.scopeSummary ?? "",
       });
-      if (ext.targetClouds.length > 0) {
-        const filtered = ext.targetClouds.filter((c) => c !== "gcp") as CloudType[];
-        if (filtered.length > 0) setTargetClouds(filtered);
-      }
+      const filtered = ext.targetClouds.filter((c): c is CloudType => c !== "gcp");
+      const clouds: CloudType[] = filtered.length > 0 ? filtered : ["azure", "aws"];
+      setTargetClouds(clouds);
       const mergedRegions: Record<string, { primary: string; dr: string }> = {};
-      for (const c of ["azure", "aws"] as const) {
+      for (const c of clouds) {
         const fromExt = ext.cloudRegions[c];
-        // Coerce the legacy "Malaysia Central" label that may come from an
-        // older extraction prompt into the correct "Malaysia West" canonical.
-        const def = MARKET_DEFAULT_REGIONS[c];
-        const norm = fromExt
-          ? {
-              primary: fromExt.primary === "Malaysia Central" ? "Malaysia West" : fromExt.primary,
-              dr: fromExt.dr === "Malaysia Central" ? "Malaysia West" : fromExt.dr,
-            }
-          : { ...def };
-        mergedRegions[c] = norm;
+        mergedRegions[c] = fromExt
+          ? { primary: normalizeRegionLabel(fromExt.primary), dr: normalizeRegionLabel(fromExt.dr) }
+          : { ...MARKET_DEFAULT_REGIONS[c] };
       }
       setCloudRegions(mergedRegions);
       setStep("review");
@@ -205,20 +121,23 @@ export function ProjectCreateWizard() {
   }
 
   function toggleCloud(id: CloudType) {
-    if (targetClouds.includes(id)) {
-      if (targetClouds.length === 1) return;
-      setTargetClouds(targetClouds.filter((c) => c !== id));
-      const next = { ...cloudRegions };
-      delete next[id];
-      setCloudRegions(next);
-    } else {
-      setTargetClouds([...targetClouds, id]);
-      setCloudRegions({ ...cloudRegions, [id]: { ...MARKET_DEFAULT_REGIONS[id] } });
-    }
+    setTargetClouds((cs) => {
+      if (cs.includes(id)) return cs.length === 1 ? cs : cs.filter((c) => c !== id);
+      return [...cs, id];
+    });
+    setCloudRegions((r) => {
+      if (r[id]) {
+        if (Object.keys(r).length === 1) return r;
+        const next = { ...r };
+        delete next[id];
+        return next;
+      }
+      return { ...r, [id]: { ...MARKET_DEFAULT_REGIONS[id] } };
+    });
   }
 
-  function setRegion(cloud: string, key: "primary" | "dr", value: string) {
-    setCloudRegions({ ...cloudRegions, [cloud]: { ...cloudRegions[cloud], [key]: value } });
+  function setRegion(cloud: CloudType, key: "primary" | "dr", value: string) {
+    setCloudRegions((r) => ({ ...r, [cloud]: { ...r[cloud], [key]: value } }));
   }
 
   async function submit() {
@@ -287,7 +206,7 @@ export function ProjectCreateWizard() {
                 type="file"
                 multiple
                 accept=".xlsx,.xls,.docx,.pdf,.txt,.md,.csv"
-                onChange={(e) => onFileChange(e.target.files)}
+                onChange={(e) => uploadFiles(e.target.files)}
                 disabled={uploading || extracting}
                 className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-1.5 file:text-sm file:font-medium hover:file:bg-secondary/80"
               />
@@ -354,7 +273,7 @@ export function ProjectCreateWizard() {
               <div className="rounded-md border bg-primary/5 p-3 space-y-2">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs uppercase tracking-wider text-muted-foreground">Detected project type</span>
-                  <span className="text-sm font-medium">{PROJECT_TYPE_LABELS[extracted.projectType]}</span>
+                  <span className="text-sm font-medium">{projectTypeLabel(extracted.projectType)}</span>
                   {extracted.confidence?.projectType && (
                     <span className={`text-[10px] uppercase rounded px-1.5 py-0.5 ${CONFIDENCE_CHIP[extracted.confidence.projectType]}`}>
                       {extracted.confidence.projectType}
@@ -367,7 +286,7 @@ export function ProjectCreateWizard() {
                 {extracted.suggestedDeliverables.length > 0 && (
                   <div className="text-xs">
                     <span className="text-muted-foreground">Suggested flow: </span>
-                    <span>{extracted.suggestedDeliverables.map((s) => STAGE_LABELS[s]).join(" → ")}</span>
+                    <span>{extracted.suggestedDeliverables.map((s) => DELIVERABLE_PREREQS[s]?.label ?? s).join(" → ")}</span>
                   </div>
                 )}
               </div>
@@ -444,27 +363,7 @@ export function ProjectCreateWizard() {
                   </span>
                 )}
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                {CLOUDS.map((c) => {
-                  const checked = targetClouds.includes(c.id);
-                  return (
-                    <button
-                      type="button"
-                      key={c.id}
-                      onClick={() => c.available && toggleCloud(c.id)}
-                      disabled={!c.available}
-                      className={`text-left rounded-md border p-3 text-sm transition ${
-                        checked ? "bg-primary/10 border-primary" : "hover:bg-accent"
-                      } ${!c.available ? "opacity-40 cursor-not-allowed" : ""}`}
-                    >
-                      <div className="font-medium flex items-center gap-2">
-                        <span>{checked ? "☑" : "☐"}</span> {c.label}
-                      </div>
-                      {!c.available && <div className="text-xs text-muted-foreground">{c.note}</div>}
-                    </button>
-                  );
-                })}
-              </div>
+              <CloudTogglePicker selected={targetClouds} onToggle={toggleCloud} />
               <p className="text-xs text-muted-foreground">Pick 1 cloud for single BOM, or 2+ for side-by-side compare.</p>
             </div>
 
@@ -480,31 +379,11 @@ export function ProjectCreateWizard() {
               <p className="text-xs text-muted-foreground">
                 Drives data residency, BOM pricing, and architecture diagrams. Defaults are Malaysia-resident.
               </p>
-              {targetClouds.map((cloudId) => {
-                const regions = listRegionsForCloud(cloudId);
-                const cloudLabel = CLOUDS.find((c) => c.id === cloudId)!.label;
-                return (
-                  <div key={cloudId} className="space-y-2 border rounded-md p-3 bg-accent/30">
-                    <div className="text-sm font-medium">{cloudLabel}</div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <RegionSelect
-                        cloudId={cloudId}
-                        kind="primary"
-                        value={cloudRegions[cloudId]?.primary ?? ""}
-                        onChange={(v) => setRegion(cloudId, "primary", v)}
-                        regions={regions}
-                      />
-                      <RegionSelect
-                        cloudId={cloudId}
-                        kind="dr"
-                        value={cloudRegions[cloudId]?.dr ?? ""}
-                        onChange={(v) => setRegion(cloudId, "dr", v)}
-                        regions={regions}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
+              <RegionPickerPerCloud
+                targetClouds={targetClouds}
+                cloudRegions={cloudRegions}
+                onChange={setRegion}
+              />
             </div>
 
             <div className="space-y-2 pt-2 border-t">
@@ -512,26 +391,7 @@ export function ProjectCreateWizard() {
               <p className="text-xs text-muted-foreground">
                 How the customer plans to consume cloud — drives pricing in the BOM. Same model is applied to both clouds for fair comparison.
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                {PURCHASE_MODELS.map((m) => {
-                  const active = purchaseModel === m;
-                  return (
-                    <button
-                      type="button"
-                      key={m}
-                      onClick={() => setPurchaseModel(m)}
-                      className={`text-left rounded-md border p-3 text-sm transition ${
-                        active ? "bg-primary/10 border-primary" : "hover:bg-accent"
-                      }`}
-                    >
-                      <div className="font-medium flex items-center gap-2">
-                        <span>{active ? "●" : "○"}</span> {PURCHASE_MODEL_LABELS[m]}
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-0.5">{PURCHASE_MODEL_HINTS[m]}</div>
-                    </button>
-                  );
-                })}
-              </div>
+              <PurchaseModelPicker value={purchaseModel} onChange={setPurchaseModel} showHints />
             </div>
 
             {extracted && (extracted.keyRequirements.length > 0 || extracted.constraints.length > 0) && (
@@ -605,53 +465,6 @@ function FieldWithChip({
         )}
       </div>
       <Input id={id} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} required={required} />
-    </div>
-  );
-}
-
-function RegionSelect({
-  cloudId, kind, value, onChange, regions,
-}: {
-  cloudId: CloudType;
-  kind: "primary" | "dr";
-  value: string;
-  onChange: (v: string) => void;
-  regions: ReturnType<typeof listRegionsForCloud>;
-}) {
-  const id = `${cloudId}-${kind}`;
-  // Group recommended regions first.
-  const recommended = regions.filter((r) => r.recommended);
-  const other = regions.filter((r) => !r.recommended);
-  // If the current value isn't in either bucket (legacy data), show it
-  // anyway so we don't silently drop the user's selection.
-  const known = new Set(regions.map((r) => r.code));
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id} className="text-xs">{kind === "primary" ? "Primary" : "DR"}</Label>
-      <select
-        id={id}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-      >
-        {value && !known.has(value) && (
-          <option value={value}>{value} (custom)</option>
-        )}
-        {recommended.length > 0 && (
-          <optgroup label="Recommended (Malaysia / SEA)">
-            {recommended.map((r) => (
-              <option key={r.code} value={r.code}>{r.label} — {r.location}</option>
-            ))}
-          </optgroup>
-        )}
-        {other.length > 0 && (
-          <optgroup label="Other regions">
-            {other.map((r) => (
-              <option key={r.code} value={r.code}>{r.label} — {r.location}</option>
-            ))}
-          </optgroup>
-        )}
-      </select>
     </div>
   );
 }

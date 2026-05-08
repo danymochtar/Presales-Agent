@@ -4,6 +4,8 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { requireSessionAndTenant } from "@/lib/tenant";
+import { MARKET_DEFAULT_REGIONS } from "@/lib/pricing/regions";
+import type { CloudType } from "@/lib/pricing/types";
 
 const CloudEnum = z.enum(["azure", "aws", "gcp"]);
 
@@ -34,19 +36,14 @@ const CreateProject = z.object({
   projectTypeRationale: z.string().optional(),
   suggestedDeliverables: z.array(StageEnum).optional(),
   mode: z.enum(["production", "training"]).default("production"),
-  // MVP 2.5: seeded inputs from upload-first wizard. Created in same transaction.
+  // Seeded inputs from upload-first wizard. Created in the same transaction.
   inputs: z.array(InputSeed).optional(),
 });
 
-// Per-cloud region defaults for Malaysia market.
-const DEFAULT_REGIONS: Record<string, { primary: string; dr: string }> = {
-  azure: { primary: "Malaysia West", dr: "Southeast Asia" },
-  aws: { primary: "ap-southeast-5", dr: "ap-southeast-1" },
-  gcp: { primary: "asia-southeast2", dr: "asia-southeast1" },
-};
-
 function defaultRegionsFor(clouds: string[]): Record<string, { primary: string; dr: string }> {
-  return Object.fromEntries(clouds.map((c) => [c, DEFAULT_REGIONS[c] ?? { primary: "", dr: "" }]));
+  return Object.fromEntries(
+    clouds.map((c) => [c, MARKET_DEFAULT_REGIONS[c as CloudType] ?? { primary: "", dr: "" }]),
+  );
 }
 
 export async function GET() {
@@ -71,9 +68,6 @@ export async function POST(req: NextRequest) {
 
   const { targetClouds, cloudRegions, inputs, suggestedDeliverables, purchaseModel, ...rest } = parsed.data;
   const regions = cloudRegions ?? defaultRegionsFor(targetClouds);
-  const firstCloud = targetClouds[0];
-  const primaryRegion = regions[firstCloud]?.primary ?? DEFAULT_REGIONS.azure.primary;
-  const drRegion = regions[firstCloud]?.dr ?? DEFAULT_REGIONS.azure.dr;
 
   const project = await prisma.$transaction(async (tx) => {
     const created = await tx.project.create({
@@ -81,8 +75,6 @@ export async function POST(req: NextRequest) {
         ...rest,
         targetClouds,
         cloudRegions: regions as object,
-        primaryRegion,
-        drRegion,
         purchaseModel,
         suggestedDeliverables: suggestedDeliverables ?? [],
         tenantId: tenant.id,

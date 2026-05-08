@@ -20,6 +20,22 @@ export const PURCHASE_MODEL_LABELS: Record<Term, string> = {
   "savings-3y":  "Savings Plan (3-year)",
 };
 
+export const PURCHASE_MODEL_HINTS: Record<Term, string> = {
+  "consumption": "Pay per hour. Maximum flexibility, no commitment.",
+  "reserved-1y": "1-year commitment. ~30-40% off PAYG. SKU-locked.",
+  "reserved-3y": "3-year commitment. ~50-60% off PAYG. SKU-locked.",
+  "savings-1y":  "1-year $/hour commitment. ~25-35% off PAYG. Cross-family flexibility.",
+  "savings-3y":  "3-year $/hour commitment. ~45-55% off PAYG. Cross-family flexibility.",
+};
+
+export const PURCHASE_MODELS = Object.keys(PURCHASE_MODEL_LABELS) as Term[];
+
+export const PRICING_AVAILABLE_CLOUDS: CloudType[] = ["azure", "aws"];
+
+export function pricingCloudsOnly(clouds: readonly string[]): CloudType[] {
+  return clouds.filter((c): c is CloudType => c === "azure" || c === "aws");
+}
+
 export type ComputeQuoteFound = {
   found: true;
   cloud: CloudType;

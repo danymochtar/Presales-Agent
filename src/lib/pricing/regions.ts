@@ -73,8 +73,8 @@ const AWS: Region[] = [
   { code: "us-west-2",      label: "us-west-2",       location: "Oregon",         country: "USA" },
 ];
 
-// GCP — kept short since pricing client is deferred to MVP 14+. Region
-// list is shown in UI for project-level documentation only.
+// GCP region list shown in UI for project-level documentation only;
+// pricing client is deferred.
 const GCP: Region[] = [
   { code: "asia-southeast1", label: "asia-southeast1", location: "Singapore",     country: "SGP", recommended: true },
   { code: "asia-southeast2", label: "asia-southeast2", location: "Jakarta",       country: "IDN" },
@@ -100,6 +100,16 @@ export function listRegionsForCloud(cloud: CloudType): Region[] {
 
 export function findRegion(cloud: CloudType, code: string): Region | undefined {
   return REGIONS[cloud]?.find((r) => r.code === code || r.label === code);
+}
+
+// "Malaysia Central" was the pre-launch name; some saved projects + older
+// LLM extractions still emit it. Always coerce to the actual region label.
+const LEGACY_LABELS: Record<string, string> = {
+  "Malaysia Central": "Malaysia West",
+};
+
+export function normalizeRegionLabel(label: string): string {
+  return LEGACY_LABELS[label] ?? label;
 }
 
 // Default region pair for a brand-new project in the Malaysia market.

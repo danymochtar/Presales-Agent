@@ -125,28 +125,29 @@ export function getAwsVmPrice(
     notes.push(regionInfo.note);
   }
 
+  // Savings Plan rates approximated as a 4% uplift over the matching RI
+  // rate (Compute SP keeps most of RI's discount with cross-family flex).
+  const TERM_TABLE: Record<Exclude<Term, "consumption">, { row: "ri1yLinuxHourly" | "ri3yLinuxHourly"; uplift: number; label: string }> = {
+    "reserved-1y": { row: "ri1yLinuxHourly", uplift: 1,    label: "RI 1y" },
+    "reserved-3y": { row: "ri3yLinuxHourly", uplift: 1,    label: "RI 3y" },
+    "savings-1y":  { row: "ri1yLinuxHourly", uplift: 1.04, label: "Compute Savings Plan 1y (approx.)" },
+    "savings-3y":  { row: "ri3yLinuxHourly", uplift: 1.04, label: "Compute Savings Plan 3y (approx.)" },
+  };
+
   const m = mult ?? 1.0;
   let hourly: number;
   if (term === "consumption") {
     hourly = (os === "linux" ? base.linuxHourly : base.windowsHourly) * m;
   } else {
-    // RI 1y/3y rates are baked in; Savings Plan rates approximated as a
-    // small premium over RI (Compute SP gives most of RI's discount with
-    // cross-family flexibility — typical effective uplift ~3-5% vs RI).
-    let baseRi: number;
-    let label: string;
-    if (term === "reserved-1y") { baseRi = base.ri1yLinuxHourly; label = "RI 1y"; }
-    else if (term === "reserved-3y") { baseRi = base.ri3yLinuxHourly; label = "RI 3y"; }
-    else if (term === "savings-1y") { baseRi = base.ri1yLinuxHourly * 1.04; label = "Compute Savings Plan 1y (approx.)"; }
-    else { baseRi = base.ri3yLinuxHourly * 1.04; label = "Compute Savings Plan 3y (approx.)"; }
-
+    const t = TERM_TABLE[term];
+    const baseRi = base[t.row] * t.uplift;
     if (os === "windows") {
       const winPremium = (base.windowsHourly - base.linuxHourly) * m;
       hourly = baseRi * m + winPremium;
-      notes.push(`${label} shown as Linux base + Windows license premium at on-demand rate (approximation)`);
+      notes.push(`${t.label} shown as Linux base + Windows license premium at on-demand rate (approximation)`);
     } else {
       hourly = baseRi * m;
-      if (term.startsWith("savings-")) notes.push(`${label} estimate — verify against AWS Cost Explorer SP estimator`);
+      if (term.startsWith("savings-")) notes.push(`${t.label} estimate — verify against AWS Cost Explorer SP estimator`);
     }
   }
 

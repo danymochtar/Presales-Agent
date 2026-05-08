@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrainingPanel } from "@/components/training-panel";
 import { CloudChip } from "@/components/cloud-chip";
+import { streamGenerate } from "@/lib/sse-stream";
+import { DELIVERABLE_PREREQS, kindOfDbType } from "@/lib/deliverable-prereqs";
 
 type Version = { id: string; version: number; status: string; createdAt: string };
 type CloudTab = { id: string; label: string };
@@ -46,18 +48,8 @@ export function DeliverableWorkspace({
   const [streamText, setStreamText] = useState<string>("");
   const [err, setErr] = useState<string | null>(null);
 
-  const labels: Record<string, string> = {
-    customer_study: "Customer study",
-    bom: "BOM",
-    proposal: "Proposal",
-    architecture: "Architecture",
-    assessment: "Assessment",
-    project_plan: "Project plan",
-    tco: "TCO",
-    sow: "SOW",
-    ms_offering: "Managed services",
-  };
-  const label = labels[deliverableType] ?? deliverableType;
+  const kind = kindOfDbType(deliverableType);
+  const label = kind ? DELIVERABLE_PREREQS[kind].label : deliverableType;
 
   async function generate() {
     if (!canGenerate) {
@@ -68,32 +60,13 @@ export function DeliverableWorkspace({
     setStreamText("");
     setErr(null);
     try {
-      const res = await fetch(generatePath, { method: "POST" });
-      if (!res.ok || !res.body) throw new Error(await res.text());
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = "";
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const events = buf.split("\n\n");
-        buf = events.pop() ?? "";
-        for (const ev of events) {
-          const line = ev.split("\n").find((l) => l.startsWith("data: "));
-          if (!line) continue;
-          try {
-            const payload = JSON.parse(line.slice(6));
-            if (payload.delta) setStreamText((t) => t + payload.delta);
-            if (payload.done) router.refresh();
-            if (payload.error) setErr(payload.error);
-          } catch {}
-        }
-      }
+      await streamGenerate(generatePath, {
+        onDelta: (d) => setStreamText((t) => t + d),
+        onDone: () => router.refresh(),
+      });
     } catch (e) {
       const raw = e instanceof Error ? e.message : "stream failed";
-      // iOS Safari uses "Load failed" as a generic network/abort error during
-      // streaming. Translate to a clearer hint pointing to retry.
+      // iOS Safari surfaces network/abort during streaming as "Load failed".
       const friendly = /load failed|network|aborted|fetch/i.test(raw)
         ? "Stream was interrupted (network or function timeout). The partial content above is still in-memory — click Generate again to retry. If this happens repeatedly, try a smaller scope or re-run from the Workflow pipeline button on the project page."
         : raw;

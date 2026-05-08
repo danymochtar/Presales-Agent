@@ -194,23 +194,15 @@ model Project {
   stage           String   @default("draft")    // draft | won | lost | pending | graduated
   mode            String   @default("production") // production | training
   scopeSummary    String?
-  // Legacy single-cloud region fields — populated as a back-compat mirror of the
-  // primary cloud's primary region. Existing BOM/proposal/architecture routes
-  // still read these. Will be removed once all deliverable routes consume
-  // cloudRegions directly (MVP 2-5).
-  primaryRegion   String   @default("Malaysia West")
-  drRegion        String   @default("Southeast Asia")
-  // Multi-cloud (added in MVP 1): clouds to evaluate (e.g. ["azure"], ["azure", "aws"])
+  // Clouds to evaluate (e.g. ["azure"], ["azure", "aws"]).
   targetClouds    String[] @default(["azure"])
-  // Optional: cloud chosen as the recommendation after assessment (Phase 2+)
+  // Cloud chosen as the recommendation after assessment.
   primaryCloud    String?
-  // Per-cloud regions: { azure: { primary, dr }, aws: { primary, dr }, gcp: { primary, dr } }
+  // { azure: { primary, dr }, aws: { primary, dr }, gcp: { primary, dr } }
   cloudRegions    Json?
-  // Purchase model / commitment applied during BOM costing.
   // consumption (PAYG / On-demand) | reserved-1y | reserved-3y | savings-1y | savings-3y
   purchaseModel   String   @default("consumption")
-  // AI-classified engagement type — drives the suggested deliverable flow
-  // (migration | greenfield | modernization | dr | poc | optimization | unknown)
+  // migration | greenfield | modernization | dr | poc | optimization | unknown
   projectType            String?
   projectTypeConfidence  String?  // high | medium | low
   projectTypeRationale   String?  // 1-2 sentence why
