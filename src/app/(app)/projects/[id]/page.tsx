@@ -110,6 +110,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           title="Architecture"
           items={architectures}
           basePath={`/projects/${project.id}/architecture`}
+          showCloud
           emptyMsg="Target-state architecture"
         />
         <DeliverableCard
