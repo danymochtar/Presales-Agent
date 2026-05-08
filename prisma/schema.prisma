@@ -197,10 +197,12 @@ model ProjectInput {
   id              String   @id @default(cuid())
   projectId       String
   project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  kind            String   // rvtools | azure_migrate | generic_csv | requirement_doc
+  kind            String   // rvtools | azure_migrate | generic_csv | rfp | meeting_notes | requirements | assessment_report | other
   blobUrl         String?
-  workloadsJson   Json?    // parsed normalized schema
-  rawSummary      String?  // human-readable summary, e.g. "23 VMs, 144 vCPU, 384 GB RAM"
+  filename        String?  // original uploaded filename (preserved for audit)
+  workloadsJson   Json?    // parsed normalized workload schema (rvtools/azure_migrate)
+  textContent     String?  @db.Text // extracted plain text from RFP/DOCX/PDF/notes (capped server-side)
+  rawSummary      String?  // human-readable parse summary (e.g. "23 VMs, 144 vCPU, 384 GB RAM" or "PDF, 12 pages")
   createdAt       DateTime @default(now())
 
   @@index([projectId])
