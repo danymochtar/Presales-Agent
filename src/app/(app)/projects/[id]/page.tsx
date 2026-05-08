@@ -36,6 +36,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   const boms = byType("bom");
   const proposals = byType("proposal");
   const architectures = byType("architecture");
+  const assessments = byType("assessment");
   const latestInput = project.inputs[0];
   const hasBom = boms.length > 0;
   const hasInput = !!latestInput;
@@ -66,6 +67,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         </div>
         <div className="flex flex-wrap gap-2 items-center justify-end">
           <ProjectModeToggle projectId={project.id} initialMode={project.mode as "production" | "training"} />
+          <Button asChild variant="outline" size="sm"><Link href={`/projects/${project.id}/assessment`}>Assessment</Link></Button>
           <Button asChild variant="outline" size="sm"><Link href={`/projects/${project.id}/bom`}>BOM</Link></Button>
           <Button asChild variant="outline" size="sm"><Link href={`/projects/${project.id}/architecture`}>Architecture</Link></Button>
           <Button asChild variant={hasBom ? "outline" : "ghost"} size="sm"><Link href={`/projects/${project.id}/proposal`}>Proposal</Link></Button>
@@ -89,11 +91,19 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <DeliverableCard
+          title="Assessment"
+          items={assessments}
+          basePath={`/projects/${project.id}/assessment`}
+          showCloud
+          emptyMsg={hasInput ? "Score per-workload readiness" : "Upload inventory first"}
+        />
         <DeliverableCard
           title="BOM"
           items={boms}
           basePath={`/projects/${project.id}/bom`}
+          showCloud
           emptyMsg={hasInput ? "Generate BOM" : "Upload inventory first"}
         />
         <DeliverableCard
