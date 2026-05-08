@@ -5,6 +5,8 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { gateway, DEFAULT_MODEL } from "@/lib/ai";
 import { EXTRACT_PROJECT_SYSTEM } from "@/lib/prompts/extract-project";
+import { requireSessionAndTenant } from "@/lib/tenant";
+import { logLlmCall } from "@/lib/ai-logging";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -145,6 +147,18 @@ export async function POST(req: NextRequest) {
 
 ${docBlocks.join("\n\n---\n\n")}`;
 
+  // Resolve tenant + user for logging (best-effort).
+  let tenantId: string | undefined;
+  let userId: string | undefined;
+  try {
+    const { tenant, user } = await requireSessionAndTenant(session.user.id);
+    tenantId = tenant.id;
+    userId = user.id;
+  } catch {
+    /* ignore — logging is best-effort */
+  }
+
+  const start = Date.now();
   try {
     const result = await generateObject({
       model: gateway(DEFAULT_MODEL),
@@ -159,8 +173,31 @@ ${docBlocks.join("\n\n---\n\n")}`;
       ],
       maxOutputTokens: 2000,
     });
+    if (tenantId) {
+      await logLlmCall({
+        tenantId,
+        userId,
+        purpose: "extract-project",
+        model: DEFAULT_MODEL,
+        inputTokens: result.usage?.inputTokens ?? 0,
+        outputTokens: result.usage?.outputTokens ?? 0,
+        durationMs: Date.now() - start,
+        succeeded: true,
+      });
+    }
     return NextResponse.json({ extracted: result.object });
   } catch (err) {
+    if (tenantId) {
+      await logLlmCall({
+        tenantId,
+        userId,
+        purpose: "extract-project",
+        model: DEFAULT_MODEL,
+        durationMs: Date.now() - start,
+        succeeded: false,
+        errorMessage: err instanceof Error ? err.message : String(err),
+      });
+    }
     return NextResponse.json(
       {
         error: "extraction failed",

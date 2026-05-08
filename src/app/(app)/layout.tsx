@@ -22,12 +22,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <Link href="/dashboard" className="hover:text-foreground">Dashboard</Link>
               <Link href="/projects" className="hover:text-foreground">Projects</Link>
               <Link href="/settings" className="hover:text-foreground">Settings</Link>
+              {user.role === "superadmin" && (
+                <Link href="/admin" className="hover:text-foreground rounded px-1.5 py-0.5 bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200 text-xs">
+                  Admin
+                </Link>
+              )}
             </nav>
           </div>
           <div className="flex items-center gap-3 text-sm text-muted-foreground">
             <span>{tenant.name}</span>
             <span className="text-xs">·</span>
             <span>{user.email}</span>
+            {user.role === "superadmin" && <span className="text-[10px] uppercase tracking-wider rounded px-1.5 py-0.5 bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200">Superadmin</span>}
             <SignOutButton />
           </div>
         </div>

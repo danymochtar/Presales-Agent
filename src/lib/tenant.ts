@@ -9,7 +9,17 @@ const DEFAULT_TENANT_SLUG = "default";
 export async function ensureDefaultTenant(userId: string) {
   const existing = await prisma.tenant.findUnique({ where: { slug: DEFAULT_TENANT_SLUG } });
   if (existing) {
-    await prisma.user.update({ where: { id: userId }, data: { tenantId: existing.id } });
+    // Promote the joining user to superadmin if no superadmin exists yet for
+    // this tenant — keeps single-user pilots functional and gives the first
+    // person to sign up the manager hat. Otherwise just attach the user.
+    const superadmins = await prisma.user.count({ where: { tenantId: existing.id, role: "superadmin" } });
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        tenantId: existing.id,
+        role: superadmins === 0 ? "superadmin" : undefined,
+      },
+    });
     return existing;
   }
 
@@ -78,7 +88,8 @@ export async function ensureDefaultTenant(userId: string) {
     },
   });
 
-  await prisma.user.update({ where: { id: userId }, data: { tenantId: tenant.id } });
+  // Tenant just created → user attaching here is the founding superadmin.
+  await prisma.user.update({ where: { id: userId }, data: { tenantId: tenant.id, role: "superadmin" } });
   return tenant;
 }
 

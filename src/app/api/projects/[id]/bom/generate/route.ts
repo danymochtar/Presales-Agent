@@ -9,6 +9,7 @@ import { batchPriceCompute, azureLabelToArm, type CloudType } from "@/lib/pricin
 import { fxRateOrFallback, usdTo } from "@/lib/pricing/fx";
 import { recommendSkuForCloud } from "@/lib/inventory/sizing";
 import type { Workload, WorkloadSet } from "@/lib/inventory/workload";
+import { logLlmCall } from "@/lib/ai-logging";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -165,6 +166,7 @@ Generate the BOM now in Markdown following the **${mode}-mode** structure. Apply
 
   let fullText = "";
   const encoder = new TextEncoder();
+  const startTs = Date.now();
   const sse = new ReadableStream({
     async start(controller) {
       try {
@@ -198,9 +200,33 @@ Generate the BOM now in Markdown following the **${mode}-mode** structure. Apply
           },
         });
 
+        const usage = await result.usage.catch(() => null);
+        await logLlmCall({
+          tenantId: project.tenantId,
+          userId: session.user.id,
+          projectId: project.id,
+          deliverableId: saved.id,
+          purpose: "generate-bom",
+          model: DEFAULT_MODEL,
+          inputTokens: usage?.inputTokens ?? 0,
+          outputTokens: usage?.outputTokens ?? 0,
+          durationMs: Date.now() - startTs,
+          succeeded: true,
+        });
+
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, deliverableId: saved.id, version, cloudProvider })}\n\n`));
         controller.close();
       } catch (err) {
+        await logLlmCall({
+          tenantId: project.tenantId,
+          userId: session.user.id,
+          projectId: project.id,
+          purpose: "generate-bom",
+          model: DEFAULT_MODEL,
+          durationMs: Date.now() - startTs,
+          succeeded: false,
+          errorMessage: err instanceof Error ? err.message : String(err),
+        });
         controller.enqueue(
           encoder.encode(`data: ${JSON.stringify({ error: err instanceof Error ? err.message : "unknown error" })}\n\n`),
         );

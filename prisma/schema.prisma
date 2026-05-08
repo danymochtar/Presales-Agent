@@ -19,6 +19,11 @@ model User {
   email         String    @unique
   emailVerified Boolean   @default(false)
   image         String?
+  // Role within the tenant. The first user signing up becomes "superadmin"
+  // (presales manager). Subsequent users default to "user" (presales
+  // consultant / head of sales). Superadmin gates: /admin/*, manages templates,
+  // monitors LLM usage + cost.
+  role          String    @default("user")
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   // membership in tenant (single-tenant MVP: all users belong to default tenant)
@@ -130,16 +135,32 @@ model ServiceCatalogItem {
 }
 
 model Template {
-  id           String   @id @default(cuid())
-  tenantId     String
-  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  type         String   // letterhead_docx | proposal_template_docx | bom_template_xlsx | ...
-  blobUrl      String
-  originalName String
-  description  String?
-  registeredAt DateTime @default(now())
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // Deliverable category this template applies to:
+  // bom | assessment | proposal | architecture | tco | project_plan | sow |
+  // ms_offering | letterhead | other
+  type          String
+  // Optional filters — null means the template applies regardless.
+  cloudProvider String?  // azure | aws | gcp | null
+  projectType   String?  // migration | greenfield | modernization | dr | poc | optimization | null
+  // Human-readable name + free description.
+  name          String
+  description   String?
+  originalName  String?
+  mimeType      String?
+  // Extracted text content used as few-shot reference when generating
+  // matching deliverables. Populated on upload via the document parsers.
+  textContent   String?  @db.Text
+  // For binary template rendering (Vercel Blob — phased in later).
+  blobUrl       String?
+  status        String   @default("active") // active | archived
+  uploadedById  String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  @@unique([tenantId, type])
+  @@index([tenantId, type, status])
 }
 
 model KnowledgeSample {
@@ -262,4 +283,32 @@ model LearnedPattern {
   createdAt       DateTime @default(now())
 
   @@index([tenantId, deliverableType])
+}
+
+// ---------- LLM usage log (superadmin observability) ----------
+// Logged after every LLM call (generateText / generateObject / streamText).
+// Drives the /admin/usage dashboard: total calls, token spend, per-user +
+// per-purpose breakdown. Best-effort — failures don't break user flow.
+model LlmCall {
+  id            String   @id @default(cuid())
+  tenantId      String
+  userId        String?
+  projectId     String?
+  deliverableId String?
+  // What this call was for: extract-project | generate-bom | generate-architecture
+  // | generate-proposal | generate-assessment | generate-tco | generate-project-plan
+  // | extract-workloads | extract-pattern | etc.
+  purpose       String
+  model         String
+  inputTokens   Int      @default(0)
+  outputTokens  Int      @default(0)
+  totalTokens   Int      @default(0)
+  durationMs    Int      @default(0)
+  succeeded     Boolean  @default(true)
+  errorMessage  String?
+  createdAt     DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, purpose])
+  @@index([tenantId, userId])
 }
