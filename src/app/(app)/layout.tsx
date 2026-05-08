@@ -15,6 +15,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/dashboard", label: "Dashboard" },
     { href: "/projects", label: "Projects" },
     { href: "/quick", label: "Quick" },
+    { href: "/help", label: "Help" },
     { href: "/settings", label: "Settings" },
   ];
   if (user.role === "superadmin") navItems.push({ href: "/admin", label: "Admin", badge: "admin" });

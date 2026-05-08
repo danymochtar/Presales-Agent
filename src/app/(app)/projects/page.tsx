@@ -33,10 +33,16 @@ export default async function ProjectsPage() {
             <ul className="divide-y">
               {projects.map((p) => {
                 const targetClouds = ((p.targetClouds as string[] | null) ?? ["azure"]).filter((c) => c !== "gcp");
+                const isQuick = p.name.startsWith("Quick: ");
                 return (
                   <li key={p.id} className="py-3 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
                     <div className="min-w-0 flex-1">
-                      <Link href={`/projects/${p.id}`} className="font-medium hover:underline truncate inline-block max-w-full">{p.name}</Link>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Link href={`/projects/${p.id}`} className="font-medium hover:underline truncate">{p.name}</Link>
+                        {isQuick && (
+                          <span className="text-[10px] uppercase tracking-wider rounded px-1.5 py-0.5 bg-primary/10 text-primary">quick</span>
+                        )}
+                      </div>
                       <p className="text-xs text-muted-foreground truncate">{p.customer} · {p.stage} · {p.mode}</p>
                       <div className="flex gap-1 mt-1.5">
                         {targetClouds.map((c) => <CloudChip key={c} cloud={c} size="xs" />)}

@@ -44,6 +44,22 @@ export function QuickGenerateWizard() {
 
   const prereqs = kind ? DELIVERABLE_PREREQS[kind] : null;
 
+  // Hard upstream chain: SOW needs BOM, etc. Quick generates them first
+  // sequentially in the same project. The form merges every step's needs
+  // so the user supplies prereqs in one go.
+  const stagesToRun: DeliverableKind[] = useMemo(() => (
+    kind ? [...DELIVERABLE_PREREQS[kind].hardUpstream, kind] : []
+  ), [kind]);
+
+  const combinedNeeds = useMemo(() => {
+    const merged = { customer: false, scope: false, inventory: false, clouds: false, regions: false, purchaseModel: false, onPremBaseline: false };
+    for (const s of stagesToRun) {
+      const n = DELIVERABLE_PREREQS[s].needs;
+      (Object.keys(merged) as (keyof typeof merged)[]).forEach((k) => { if (n[k]) merged[k] = true; });
+    }
+    return merged;
+  }, [stagesToRun]);
+
   const grouped = useMemo(() => {
     const out: Record<Group, DeliverableKind[]> = { discover: [], design: [], commercial: [], delivery: [] };
     for (const k of DELIVERABLES_IN_LIFECYCLE_ORDER) out[DELIVERABLE_PREREQS[k].group].push(k);
@@ -78,13 +94,13 @@ export function QuickGenerateWizard() {
 
   function validate(): string | null {
     if (!kind || !prereqs) return "pick a deliverable first";
-    if (prereqs.needs.customer && !customer.trim()) return "customer is required";
-    if (prereqs.needs.scope && !scope.trim()) return "scope summary is required";
-    if (prereqs.needs.inventory) {
+    if (combinedNeeds.customer && !customer.trim()) return "customer is required";
+    if (combinedNeeds.scope && !scope.trim()) return "scope summary is required";
+    if (combinedNeeds.inventory) {
       const hasWorkloads = parsedFiles.some((f) => f.workloads && f.workloads.workloads.length > 0);
       if (!hasWorkloads) return "upload an inventory (RVTools / Azure Migrate / CSV) — needed to size workloads";
     }
-    if (prereqs.needs.clouds && targetClouds.length === 0) return "pick at least one target cloud";
+    if (combinedNeeds.clouds && targetClouds.length === 0) return "pick at least one target cloud";
     return null;
   }
 
@@ -104,8 +120,8 @@ export function QuickGenerateWizard() {
         textContent: f.textContent,
         workloadsJson: f.workloads,
       }));
-      const cloudsForProject: CloudType[] = prereqs.needs.clouds ? targetClouds : ["azure"];
-      const regionsForProject = prereqs.needs.regions
+      const cloudsForProject: CloudType[] = combinedNeeds.clouds ? targetClouds : ["azure"];
+      const regionsForProject = combinedNeeds.regions
         ? cloudRegions
         : { azure: { ...MARKET_DEFAULT_REGIONS.azure } };
 
@@ -128,10 +144,17 @@ export function QuickGenerateWizard() {
       const projectId = createData.project.id as string;
 
       const cloudQS: CloudType = cloudsForProject[0];
-      await streamGenerate(`/api/projects/${projectId}/${kind}/generate?cloud=${cloudQS}`, {
-        onDelta: (d) => setRunText((t) => t + d),
-        onDone: () => router.push(`/projects/${projectId}/${kind}`),
-      });
+      for (let i = 0; i < stagesToRun.length; i++) {
+        const stage = stagesToRun[i];
+        const isLast = i === stagesToRun.length - 1;
+        if (stagesToRun.length > 1) {
+          setRunText((t) => t + (t ? "\n\n" : "") + `## Generating ${DELIVERABLE_PREREQS[stage].label}…\n\n`);
+        }
+        await streamGenerate(`/api/projects/${projectId}/${stage}/generate?cloud=${cloudQS}`, {
+          onDelta: (d) => setRunText((t) => t + d),
+          onDone: () => { if (isLast) router.push(`/projects/${projectId}/${kind}`); },
+        });
+      }
     } catch (e) {
       setErr(e instanceof Error ? e.message : "generate failed");
       setStep("fill");
@@ -200,6 +223,12 @@ export function QuickGenerateWizard() {
           <div>
             <CardTitle className="text-base">{prereqs.label}</CardTitle>
             <CardDescription>{prereqs.shortDesc}</CardDescription>
+            {prereqs.hardUpstream.length > 0 && (
+              <p className="text-xs text-amber-700 dark:text-amber-400 mt-1.5">
+                Pipeline: {stagesToRun.map((s) => DELIVERABLE_PREREQS[s].label).join(" → ")}.
+                Form di bawah minta prereqs gabungan untuk semua tahap.
+              </p>
+            )}
           </div>
           <Button variant="ghost" size="sm" onClick={() => { setKind(null); setStep("pick"); setErr(null); }}>
             ← Pick a different deliverable
@@ -207,7 +236,7 @@ export function QuickGenerateWizard() {
         </div>
       </CardHeader>
       <CardContent className="space-y-5">
-        {prereqs.needs.customer && (
+        {combinedNeeds.customer && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="customer">Customer <span className="text-destructive">*</span></Label>
@@ -220,7 +249,7 @@ export function QuickGenerateWizard() {
           </div>
         )}
 
-        {prereqs.needs.scope && (
+        {combinedNeeds.scope && (
           <div className="space-y-1.5">
             <Label htmlFor="scope">Scope summary <span className="text-destructive">*</span></Label>
             <textarea
@@ -233,7 +262,7 @@ export function QuickGenerateWizard() {
           </div>
         )}
 
-        {prereqs.needs.inventory && (
+        {combinedNeeds.inventory && (
           <div className="space-y-2">
             <Label htmlFor="file">Inventory <span className="text-destructive">*</span></Label>
             <p className="text-xs text-muted-foreground">RVTools / Azure Migrate Excel, generic CSV, or a workload list.</p>
@@ -261,14 +290,14 @@ export function QuickGenerateWizard() {
           </div>
         )}
 
-        {prereqs.needs.clouds && (
+        {combinedNeeds.clouds && (
           <div className="space-y-2">
             <Label>Target cloud(s)</Label>
             <CloudTogglePicker selected={targetClouds} onToggle={toggleCloud} />
           </div>
         )}
 
-        {prereqs.needs.regions && (
+        {combinedNeeds.regions && (
           <RegionPickerPerCloud
             targetClouds={targetClouds}
             cloudRegions={cloudRegions}
@@ -276,14 +305,14 @@ export function QuickGenerateWizard() {
           />
         )}
 
-        {prereqs.needs.purchaseModel && (
+        {combinedNeeds.purchaseModel && (
           <div className="space-y-2">
             <Label>Purchase model</Label>
             <PurchaseModelPicker value={purchaseModel} onChange={setPurchaseModel} />
           </div>
         )}
 
-        {prereqs.needs.onPremBaseline && (
+        {combinedNeeds.onPremBaseline && (
           <div className="space-y-1.5">
             <Label htmlFor="onprem">On-prem baseline (optional)</Label>
             <textarea
@@ -314,7 +343,11 @@ export function QuickGenerateWizard() {
         <div className="flex justify-between items-center pt-2 border-t">
           <Button variant="ghost" onClick={() => { setKind(null); setStep("pick"); }}>← Back</Button>
           <Button onClick={run} disabled={step === "running"}>
-            {step === "running" ? "Generating…" : `Generate ${prereqs.label.toLowerCase()}`}
+            {step === "running"
+              ? "Generating…"
+              : stagesToRun.length > 1
+                ? `Generate ${stagesToRun.map((s) => DELIVERABLE_PREREQS[s].label).join(" + ")}`
+                : `Generate ${prereqs.label.toLowerCase()}`}
           </Button>
         </div>
       </CardContent>

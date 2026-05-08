@@ -77,11 +77,12 @@ export default async function DashboardPage() {
           <p className="text-sm text-muted-foreground">
             {tenant.country} · {tenant.currency}
             {tenant.fxMyrPerUsd ? ` · FX MYR/USD ${tenant.fxMyrPerUsd}` : ""}
+            {" · "}
+            <Link href="/help" className="underline hover:text-foreground">Baru di sini? Buka petunjuk</Link>
           </p>
         </div>
       </div>
 
-      {/* Entry-point chooser — full pipeline vs single deliverable */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <Link
           href="/projects/new"
