@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { UploadInputForm } from "@/components/upload-input-form";
 import { ProjectModeToggle } from "@/components/project-mode-toggle";
+import { ExtractWorkloadsButton } from "@/components/extract-workloads-button";
 
 const CLOUD_LABEL: Record<string, string> = {
   azure: "Azure",
@@ -82,12 +83,25 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           <UploadInputForm projectId={project.id} />
           {project.inputs.length > 0 && (
             <ul className="divide-y text-sm">
-              {project.inputs.map((i) => (
-                <li key={i.id} className="py-2 flex justify-between">
-                  <span>{i.kind}</span>
-                  <span className="text-muted-foreground">{i.rawSummary}</span>
-                </li>
-              ))}
+              {project.inputs.map((i) => {
+                const hasWorkloads = !!i.workloadsJson;
+                const hasText = !!i.textContent;
+                const canTryExtract = !hasWorkloads && hasText;
+                return (
+                  <li key={i.id} className="py-2 flex flex-wrap items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs bg-accent rounded px-1.5 py-0.5">{i.kind}</span>
+                        {i.filename && <span className="font-medium truncate">{i.filename}</span>}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">{i.rawSummary}</p>
+                    </div>
+                    {canTryExtract && (
+                      <ExtractWorkloadsButton projectId={project.id} inputId={i.id} />
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </CardContent>
