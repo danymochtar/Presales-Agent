@@ -51,11 +51,13 @@ async function fetchAll(odataFilter: string, currency = "USD", maxPages = 5): Pr
   return items;
 }
 
+import type { Term } from "./types";
+
 export type VmPriceResult = {
   sku: string;
   region: string;
   osType: "linux" | "windows";
-  term: "consumption" | "reservation-1y" | "reservation-3y";
+  term: Term;
   found: boolean;
   hourlyUsd?: number;
   monthlyUsd?: number;
@@ -64,26 +66,37 @@ export type VmPriceResult = {
   effectiveFrom?: string;
   fallbackRegionUsed?: string;
   message?: string;
+  notes?: string[];
 };
 
 export async function getVmPrice(
   armSkuName: string,
   region: string,
   osType: "linux" | "windows" = "linux",
-  term: "consumption" | "reservation-1y" | "reservation-3y" = "consumption",
+  term: Term = "consumption",
 ): Promise<VmPriceResult> {
+  // Azure Savings Plan rates aren't returned by the Retail Prices API; we
+  // price them as a small uplift over the equivalent RI (Compute SP gives
+  // most of RI's discount with VM-family flexibility — typical effective
+  // uplift ~3-5%).
+  const isSavings = term === "savings-1y" || term === "savings-3y";
+  const apiTerm: "consumption" | "reserved-1y" | "reserved-3y" =
+    term === "consumption" ? "consumption"
+    : term === "reserved-1y" || term === "savings-1y" ? "reserved-1y"
+    : "reserved-3y";
+
   const baseFilter = [
     "serviceName eq 'Virtual Machines'",
     `armSkuName eq '${armSkuName}'`,
     `armRegionName eq '${region}'`,
-    term === "consumption" ? "priceType eq 'Consumption'" : "priceType eq 'Reservation'",
+    apiTerm === "consumption" ? "priceType eq 'Consumption'" : "priceType eq 'Reservation'",
   ].join(" and ");
 
   let items = await fetchAll(baseFilter);
   let usedRegion = region;
 
-  if (items.length === 0 && region === "malaysiacentral") {
-    // Fallback to Southeast Asia for SKUs not yet in MY Central.
+  if (items.length === 0 && (region === "malaysiawest" || region === "malaysiacentral")) {
+    // Fallback to Southeast Asia for SKUs not yet in Malaysia.
     usedRegion = "southeastasia";
     const fallbackFilter = baseFilter.replace(
       `armRegionName eq '${region}'`,
@@ -99,8 +112,8 @@ export async function getVmPrice(
     if (osType === "linux" && isWindows) return false;
     if (osType === "windows" && !isWindows) return false;
     if (sku.includes("low priority") || sku.includes("spot")) return false;
-    if (term === "reservation-1y" && it.reservationTerm !== "1 Year") return false;
-    if (term === "reservation-3y" && it.reservationTerm !== "3 Years") return false;
+    if (apiTerm === "reserved-1y" && it.reservationTerm !== "1 Year") return false;
+    if (apiTerm === "reserved-3y" && it.reservationTerm !== "3 Years") return false;
     return true;
   });
 
@@ -111,23 +124,34 @@ export async function getVmPrice(
       osType,
       term,
       found: false,
-      message: "no matching price found in MY Central or SEA fallback",
+      message: "no matching price found in Malaysia or SEA fallback",
     };
   }
 
   const best = filtered.reduce((a, b) => (a.retailPrice < b.retailPrice ? a : b));
+  // Reservations report total upfront; convert to effective hourly when needed.
+  const isReservation = apiTerm !== "consumption";
+  const totalHours = apiTerm === "reserved-1y" ? 365 * 24 : apiTerm === "reserved-3y" ? 3 * 365 * 24 : 0;
+  const baseHourly = isReservation && totalHours > 0
+    ? best.retailPrice / totalHours
+    : best.retailPrice;
+  const finalHourly = isSavings ? baseHourly * 1.04 : baseHourly;
+  const notes: string[] = [];
+  if (isSavings) notes.push("Azure Compute Savings Plan estimate — verify in Azure Cost Management / pricing calculator");
+
   return {
     sku: armSkuName,
     region,
     osType,
     term,
     found: true,
-    hourlyUsd: best.retailPrice,
-    monthlyUsd: Math.round(best.retailPrice * 730 * 100) / 100,
+    hourlyUsd: finalHourly,
+    monthlyUsd: Math.round(finalHourly * 730 * 100) / 100,
     productName: best.productName,
     unitOfMeasure: best.unitOfMeasure,
     effectiveFrom: best.effectiveStartDate,
     fallbackRegionUsed: usedRegion !== region ? usedRegion : undefined,
+    notes: notes.length ? notes : undefined,
   };
 }
 
@@ -135,7 +159,7 @@ export async function batchVmPrices(
   skus: string[],
   region: string,
   osType: "linux" | "windows" = "linux",
-  term: "consumption" | "reservation-1y" | "reservation-3y" = "consumption",
+  term: Term = "consumption",
 ): Promise<Record<string, VmPriceResult>> {
   const unique = [...new Set(skus)];
   const results = await Promise.all(unique.map((s) => getVmPrice(s, region, osType, term)));

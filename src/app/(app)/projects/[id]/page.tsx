@@ -140,16 +140,21 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           {project.scopeSummary && (
             <p className="text-sm text-foreground/80 mt-2 max-w-3xl">{project.scopeSummary}</p>
           )}
-          <div className="flex gap-1.5 mt-2 flex-wrap">
+          <div className="flex gap-1.5 mt-2 flex-wrap items-center">
             {targetClouds.map((c) => (
-              <span key={c} className="inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-xs chip-azure" style={c === "aws" ? undefined : undefined}>
+              <span key={c} className="inline-flex items-center gap-1.5">
                 <CloudChip cloud={c} size="xs" />
                 {cloudRegions[c] && (
                   <span className="text-muted-foreground text-[11px]">{cloudRegions[c].primary}</span>
                 )}
-                {project.primaryCloud === c && <span title="Primary cloud">★</span>}
+                {project.primaryCloud === c && <span title="Primary cloud" className="text-[11px]">★</span>}
               </span>
             ))}
+            {project.purchaseModel && project.purchaseModel !== "consumption" && (
+              <span className="text-[10px] uppercase tracking-wider rounded px-1.5 py-0.5 bg-primary/10 text-primary">
+                {project.purchaseModel}
+              </span>
+            )}
           </div>
         </div>
         <div className="shrink-0">

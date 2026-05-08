@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { gateway, DEFAULT_MODEL } from "@/lib/ai";
 import { GENERATE_BOM_SYSTEM } from "@/lib/prompts/generate-bom";
 import { batchPriceCompute, azureLabelToArm, type CloudType } from "@/lib/pricing";
+import { PURCHASE_MODEL_LABELS, type Term } from "@/lib/pricing/types";
 import { fxRateOrFallback, usdTo } from "@/lib/pricing/fx";
 import { recommendSkuForCloud } from "@/lib/inventory/sizing";
 import type { Workload, WorkloadSet } from "@/lib/inventory/workload";
@@ -18,9 +19,9 @@ export const maxDuration = 60;
 type CloudRegions = Record<string, { primary: string; dr: string } | undefined>;
 
 const PRICING_REGION_DEFAULTS: Record<CloudType, { primary: string; dr: string }> = {
-  azure: { primary: "malaysiacentral", dr: "southeastasia" },
-  aws:   { primary: "ap-southeast-5",   dr: "ap-southeast-1" },
-  gcp:   { primary: "asia-southeast2",  dr: "asia-southeast1" },
+  azure: { primary: "malaysiawest",    dr: "southeastasia" },
+  aws:   { primary: "ap-southeast-5",  dr: "ap-southeast-1" },
+  gcp:   { primary: "asia-southeast2", dr: "asia-southeast1" },
 };
 
 function pricingRegion(cloud: CloudType, label: string | undefined): string {
@@ -55,6 +56,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
   const targetClouds = (project.targetClouds ?? ["azure"]) as CloudType[];
   const cloudRegions = (project.cloudRegions as CloudRegions | null) ?? {};
+  const purchaseModel = (project.purchaseModel ?? "consumption") as Term;
 
   let cloudsToPrice: CloudType[];
   if (cloudParam === "compare") {
@@ -85,14 +87,16 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     const winSkus = [...new Set(sizedWorkloads.filter((w) => w.os === "windows").map((w) => w.recommendedSku!))];
 
     const [linuxPrices, winPrices] = await Promise.all([
-      linuxSkus.length ? batchPriceCompute(cloud, linuxSkus, region, "linux", "consumption") : Promise.resolve({}),
-      winSkus.length ? batchPriceCompute(cloud, winSkus, region, "windows", "consumption") : Promise.resolve({}),
+      linuxSkus.length ? batchPriceCompute(cloud, linuxSkus, region, "linux", purchaseModel) : Promise.resolve({}),
+      winSkus.length ? batchPriceCompute(cloud, winSkus, region, "windows", purchaseModel) : Promise.resolve({}),
     ]);
 
     pricingByCloud[cloud] = {
       regionLabel: labelPrimary ?? PRICING_REGION_DEFAULTS[cloud].primary,
       regionPricingId: region,
       drRegion: cloudRegions[cloud]?.dr ?? PRICING_REGION_DEFAULTS[cloud].dr,
+      purchaseModel,
+      purchaseModelLabel: PURCHASE_MODEL_LABELS[purchaseModel],
       sizedWorkloads,
       prices: { linux: linuxPrices, windows: winPrices },
     };
@@ -134,6 +138,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
 mode: ${mode}
 clouds: [${cloudsToPrice.join(", ")}]
+purchase model: ${PURCHASE_MODEL_LABELS[purchaseModel]} (${purchaseModel})
 ${templateSection ? `\n${templateSection}` : ""}
 ## Project
 - Customer: ${project.customer}

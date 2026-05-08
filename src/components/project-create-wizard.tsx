@@ -5,12 +5,25 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { listRegionsForCloud, MARKET_DEFAULT_REGIONS } from "@/lib/pricing/regions";
+import { PURCHASE_MODEL_LABELS, type Term } from "@/lib/pricing/types";
+import type { CloudType } from "@/lib/pricing/types";
 
-const CLOUDS = [
-  { id: "azure", label: "Azure", default: { primary: "Malaysia Central",  dr: "Southeast Asia" }, primaryLabel: "Malaysia Central",      drLabel: "Southeast Asia (Singapore)", available: true },
-  { id: "aws",   label: "AWS",   default: { primary: "ap-southeast-5",     dr: "ap-southeast-1" }, primaryLabel: "ap-southeast-5 (Malaysia)", drLabel: "ap-southeast-1 (Singapore)", available: true },
-  { id: "gcp",   label: "GCP",   default: { primary: "asia-southeast2",    dr: "asia-southeast1" }, primaryLabel: "asia-southeast2 (Jakarta)", drLabel: "asia-southeast1 (Singapore)", available: false, note: "Pricing integration deferred" },
-] as const;
+const CLOUDS: { id: CloudType; label: string; available: boolean; note?: string }[] = [
+  { id: "azure", label: "Azure", available: true },
+  { id: "aws",   label: "AWS",   available: true },
+  { id: "gcp",   label: "GCP",   available: false, note: "Pricing integration deferred" },
+];
+
+const PURCHASE_MODELS: Term[] = ["consumption", "reserved-1y", "reserved-3y", "savings-1y", "savings-3y"];
+
+const PURCHASE_MODEL_HINTS: Record<Term, string> = {
+  "consumption": "Pay per hour. Maximum flexibility, no commitment.",
+  "reserved-1y": "1-year commitment. ~30-40% off PAYG. SKU-locked.",
+  "reserved-3y": "3-year commitment. ~50-60% off PAYG. SKU-locked.",
+  "savings-1y":  "1-year $/hour commitment. ~25-35% off PAYG. Cross-family flexibility.",
+  "savings-3y":  "3-year $/hour commitment. ~45-55% off PAYG. Cross-family flexibility.",
+};
 
 type ParsedFile = {
   filename: string;
@@ -96,11 +109,12 @@ export function ProjectCreateWizard() {
     customerSegment: "" as "" | "BFSI" | "Gov" | "MNC" | "SMB",
     scopeSummary: "",
   });
-  const [targetClouds, setTargetClouds] = useState<string[]>(["azure", "aws"]);
+  const [targetClouds, setTargetClouds] = useState<CloudType[]>(["azure", "aws"]);
   const [cloudRegions, setCloudRegions] = useState<Record<string, { primary: string; dr: string }>>({
-    azure: { ...CLOUDS[0].default },
-    aws: { ...CLOUDS[1].default },
+    azure: { ...MARKET_DEFAULT_REGIONS.azure },
+    aws:   { ...MARKET_DEFAULT_REGIONS.aws },
   });
+  const [purchaseModel, setPurchaseModel] = useState<Term>("consumption");
 
   async function uploadFile(file: File) {
     setErr(null);
@@ -164,14 +178,22 @@ export function ProjectCreateWizard() {
         scopeSummary: ext.scopeSummary ?? "",
       });
       if (ext.targetClouds.length > 0) {
-        const filtered = ext.targetClouds.filter((c) => c !== "gcp");
+        const filtered = ext.targetClouds.filter((c) => c !== "gcp") as CloudType[];
         if (filtered.length > 0) setTargetClouds(filtered);
       }
       const mergedRegions: Record<string, { primary: string; dr: string }> = {};
-      for (const c of ["azure", "aws"]) {
+      for (const c of ["azure", "aws"] as const) {
         const fromExt = ext.cloudRegions[c];
-        const def = CLOUDS.find((x) => x.id === c)!.default;
-        mergedRegions[c] = fromExt ?? { ...def };
+        // Coerce the legacy "Malaysia Central" label that may come from an
+        // older extraction prompt into the correct "Malaysia West" canonical.
+        const def = MARKET_DEFAULT_REGIONS[c];
+        const norm = fromExt
+          ? {
+              primary: fromExt.primary === "Malaysia Central" ? "Malaysia West" : fromExt.primary,
+              dr: fromExt.dr === "Malaysia Central" ? "Malaysia West" : fromExt.dr,
+            }
+          : { ...def };
+        mergedRegions[c] = norm;
       }
       setCloudRegions(mergedRegions);
       setStep("review");
@@ -182,7 +204,7 @@ export function ProjectCreateWizard() {
     }
   }
 
-  function toggleCloud(id: string) {
+  function toggleCloud(id: CloudType) {
     if (targetClouds.includes(id)) {
       if (targetClouds.length === 1) return;
       setTargetClouds(targetClouds.filter((c) => c !== id));
@@ -191,8 +213,7 @@ export function ProjectCreateWizard() {
       setCloudRegions(next);
     } else {
       setTargetClouds([...targetClouds, id]);
-      const def = CLOUDS.find((c) => c.id === id)!.default;
-      setCloudRegions({ ...cloudRegions, [id]: { ...def } });
+      setCloudRegions({ ...cloudRegions, [id]: { ...MARKET_DEFAULT_REGIONS[id] } });
     }
   }
 
@@ -221,6 +242,7 @@ export function ProjectCreateWizard() {
           scopeSummary: form.scopeSummary || undefined,
           targetClouds,
           cloudRegions,
+          purchaseModel,
           inputs,
           projectType: extracted?.projectType,
           projectTypeConfidence: extracted?.confidence?.projectType,
@@ -438,7 +460,7 @@ export function ProjectCreateWizard() {
                       <div className="font-medium flex items-center gap-2">
                         <span>{checked ? "☑" : "☐"}</span> {c.label}
                       </div>
-                      {!c.available && <div className="text-xs text-muted-foreground">{(c as { note?: string }).note}</div>}
+                      {!c.available && <div className="text-xs text-muted-foreground">{c.note}</div>}
                     </button>
                   );
                 })}
@@ -446,34 +468,71 @@ export function ProjectCreateWizard() {
               <p className="text-xs text-muted-foreground">Pick 1 cloud for single BOM, or 2+ for side-by-side compare.</p>
             </div>
 
-            {targetClouds.map((cloudId) => {
-              const cloud = CLOUDS.find((c) => c.id === cloudId)!;
-              return (
-                <div key={cloudId} className="space-y-2 border rounded-md p-3 bg-accent/30">
-                  <div className="text-sm font-medium">{cloud.label} regions</div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label htmlFor={`${cloudId}-primary`} className="text-xs">Primary</Label>
-                      <Input
-                        id={`${cloudId}-primary`}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <Label>Regions (primary + DR)</Label>
+                {extracted?.confidence.cloudRegions && (
+                  <span className={`text-[10px] uppercase rounded px-1.5 py-0.5 ${CONFIDENCE_CHIP[extracted.confidence.cloudRegions]}`}>
+                    {extracted.confidence.cloudRegions}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Drives data residency, BOM pricing, and architecture diagrams. Defaults are Malaysia-resident.
+              </p>
+              {targetClouds.map((cloudId) => {
+                const regions = listRegionsForCloud(cloudId);
+                const cloudLabel = CLOUDS.find((c) => c.id === cloudId)!.label;
+                return (
+                  <div key={cloudId} className="space-y-2 border rounded-md p-3 bg-accent/30">
+                    <div className="text-sm font-medium">{cloudLabel}</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <RegionSelect
+                        cloudId={cloudId}
+                        kind="primary"
                         value={cloudRegions[cloudId]?.primary ?? ""}
-                        onChange={(e) => setRegion(cloudId, "primary", e.target.value)}
-                        placeholder={cloud.primaryLabel}
+                        onChange={(v) => setRegion(cloudId, "primary", v)}
+                        regions={regions}
                       />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor={`${cloudId}-dr`} className="text-xs">DR</Label>
-                      <Input
-                        id={`${cloudId}-dr`}
+                      <RegionSelect
+                        cloudId={cloudId}
+                        kind="dr"
                         value={cloudRegions[cloudId]?.dr ?? ""}
-                        onChange={(e) => setRegion(cloudId, "dr", e.target.value)}
-                        placeholder={cloud.drLabel}
+                        onChange={(v) => setRegion(cloudId, "dr", v)}
+                        regions={regions}
                       />
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
+
+            <div className="space-y-2 pt-2 border-t">
+              <Label>Purchase model</Label>
+              <p className="text-xs text-muted-foreground">
+                How the customer plans to consume cloud — drives pricing in the BOM. Same model is applied to both clouds for fair comparison.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {PURCHASE_MODELS.map((m) => {
+                  const active = purchaseModel === m;
+                  return (
+                    <button
+                      type="button"
+                      key={m}
+                      onClick={() => setPurchaseModel(m)}
+                      className={`text-left rounded-md border p-3 text-sm transition ${
+                        active ? "bg-primary/10 border-primary" : "hover:bg-accent"
+                      }`}
+                    >
+                      <div className="font-medium flex items-center gap-2">
+                        <span>{active ? "●" : "○"}</span> {PURCHASE_MODEL_LABELS[m]}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-0.5">{PURCHASE_MODEL_HINTS[m]}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
             {extracted && (extracted.keyRequirements.length > 0 || extracted.constraints.length > 0) && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t">
@@ -546,6 +605,53 @@ function FieldWithChip({
         )}
       </div>
       <Input id={id} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} required={required} />
+    </div>
+  );
+}
+
+function RegionSelect({
+  cloudId, kind, value, onChange, regions,
+}: {
+  cloudId: CloudType;
+  kind: "primary" | "dr";
+  value: string;
+  onChange: (v: string) => void;
+  regions: ReturnType<typeof listRegionsForCloud>;
+}) {
+  const id = `${cloudId}-${kind}`;
+  // Group recommended regions first.
+  const recommended = regions.filter((r) => r.recommended);
+  const other = regions.filter((r) => !r.recommended);
+  // If the current value isn't in either bucket (legacy data), show it
+  // anyway so we don't silently drop the user's selection.
+  const known = new Set(regions.map((r) => r.code));
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id} className="text-xs">{kind === "primary" ? "Primary" : "DR"}</Label>
+      <select
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+      >
+        {value && !known.has(value) && (
+          <option value={value}>{value} (custom)</option>
+        )}
+        {recommended.length > 0 && (
+          <optgroup label="Recommended (Malaysia / SEA)">
+            {recommended.map((r) => (
+              <option key={r.code} value={r.code}>{r.label} — {r.location}</option>
+            ))}
+          </optgroup>
+        )}
+        {other.length > 0 && (
+          <optgroup label="Other regions">
+            {other.map((r) => (
+              <option key={r.code} value={r.code}>{r.label} — {r.location}</option>
+            ))}
+          </optgroup>
+        )}
+      </select>
     </div>
   );
 }

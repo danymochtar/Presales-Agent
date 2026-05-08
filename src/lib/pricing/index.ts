@@ -61,20 +61,40 @@ export async function batchPriceCompute(
   throw new Error(`Cloud ${cloud} not supported (GCP deferred)`);
 }
 
-// Region defaults per cloud, optimized for Malaysia market
+// Region defaults per cloud, optimized for Malaysia market.
+// Azure region in Malaysia is "Malaysia West" (armName malaysiawest).
 export const DEFAULT_REGIONS: Record<CloudType, { primary: string; dr: string; primaryLabel: string; drLabel: string }> = {
-  azure: { primary: "Malaysia Central", dr: "Southeast Asia", primaryLabel: "Malaysia Central", drLabel: "Southeast Asia" },
-  aws:   { primary: "ap-southeast-5",   dr: "ap-southeast-1", primaryLabel: "Malaysia",         drLabel: "Singapore" },
-  gcp:   { primary: "asia-southeast2",  dr: "asia-southeast1", primaryLabel: "Jakarta",          drLabel: "Singapore" },
+  azure: { primary: "Malaysia West",   dr: "Southeast Asia", primaryLabel: "Malaysia West", drLabel: "Southeast Asia" },
+  aws:   { primary: "ap-southeast-5",  dr: "ap-southeast-1", primaryLabel: "Malaysia",      drLabel: "Singapore" },
+  gcp:   { primary: "asia-southeast2", dr: "asia-southeast1", primaryLabel: "Jakarta",      drLabel: "Singapore" },
 };
 
-// Map Azure region "label" used in Project.cloudRegions JSON to ARM region
-// names that the Azure pricing API expects.
+// Map Azure region label used in Project.cloudRegions JSON to ARM region
+// names that the Azure pricing API expects. Falls back to a `lowercase +
+// strip whitespace` heuristic for regions not listed here (which matches
+// Azure's naming convention for nearly all regions).
 const AZURE_REGION_TO_ARM: Record<string, string> = {
-  "Malaysia Central": "malaysiacentral",
-  "Southeast Asia": "southeastasia",
-  "East Asia": "eastasia",
-  "Australia East": "australiaeast",
+  "Malaysia West":       "malaysiawest",
+  "Southeast Asia":      "southeastasia",
+  "East Asia":           "eastasia",
+  "Indonesia Central":   "indonesiacentral",
+  "Australia East":      "australiaeast",
+  "Australia Southeast": "australiasoutheast",
+  "Japan East":          "japaneast",
+  "Japan West":          "japanwest",
+  "Korea Central":       "koreacentral",
+  "Korea South":         "koreasouth",
+  "Central India":       "centralindia",
+  "South India":         "southindia",
+  "UAE North":           "uaenorth",
+  "West Europe":         "westeurope",
+  "North Europe":        "northeurope",
+  "East US":             "eastus",
+  "East US 2":           "eastus2",
+  "West US 2":           "westus2",
+  "West US 3":           "westus3",
+  // Back-compat: pre-launch announcement name.
+  "Malaysia Central":    "malaysiawest",
 };
 
 export function azureLabelToArm(label: string): string {

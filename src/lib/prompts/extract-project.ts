@@ -69,9 +69,10 @@ You MAY adjust this list based on customer-specific signals — e.g. if the docs
 - Do NOT infer customer name from filename alone — only from doc content.
 - targetClouds: only include clouds the documents explicitly mention as candidates. If none stated, return ["azure"] with confidence "low".
 - cloudRegions: only fill when the docs name specific regions. Map to canonical names:
-  - Azure: "Malaysia Central", "Southeast Asia", "East Asia", "Australia East"
-  - AWS: "ap-southeast-5", "ap-southeast-1", "ap-southeast-3", "ap-southeast-2"
-  - GCP: "asia-southeast1", "asia-southeast2"
+  - Azure: "Malaysia West", "Southeast Asia", "East Asia", "Indonesia Central", "Australia East", "Australia Southeast", "Japan East", "Korea Central", "Central India", "UAE North", "West Europe", "East US"
+  - AWS: "ap-southeast-5" (Malaysia), "ap-southeast-1" (Singapore), "ap-southeast-3" (Jakarta), "ap-southeast-7" (Thailand), "ap-southeast-2" (Sydney), "ap-northeast-1" (Tokyo), "ap-northeast-2" (Seoul), "ap-east-1" (HK), "ap-south-1" (Mumbai), "us-east-1", "eu-west-1"
+  - GCP: "asia-southeast1", "asia-southeast2", "asia-east1", "asia-east2", "asia-northeast1", "asia-south1"
+  - Note: Azure's region in Malaysia is "Malaysia West" — NOT "Malaysia Central" (that was a pre-launch name and is no longer correct).
 - customerSegment heuristics:
   - BFSI: bank, insurance, financial, capital markets, fintech
   - Gov: government, ministry, kementerian, public sector, GLC
@@ -98,7 +99,7 @@ Output:
   "scopeSummary": "Migrate 30 on-premise VMs to cloud with primary in Malaysia and DR in Singapore.",
   "targetClouds": ["azure"],
   "cloudRegions": {
-    "azure": { "primary": "Malaysia Central", "dr": "Southeast Asia" }
+    "azure": { "primary": "Malaysia West", "dr": "Southeast Asia" }
   },
   "keyRequirements": [
     "Compliance: PDPA 2010, BNM RMiT",

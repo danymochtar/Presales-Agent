@@ -198,7 +198,7 @@ model Project {
   // primary cloud's primary region. Existing BOM/proposal/architecture routes
   // still read these. Will be removed once all deliverable routes consume
   // cloudRegions directly (MVP 2-5).
-  primaryRegion   String   @default("Malaysia Central")
+  primaryRegion   String   @default("Malaysia West")
   drRegion        String   @default("Southeast Asia")
   // Multi-cloud (added in MVP 1): clouds to evaluate (e.g. ["azure"], ["azure", "aws"])
   targetClouds    String[] @default(["azure"])
@@ -206,6 +206,9 @@ model Project {
   primaryCloud    String?
   // Per-cloud regions: { azure: { primary, dr }, aws: { primary, dr }, gcp: { primary, dr } }
   cloudRegions    Json?
+  // Purchase model / commitment applied during BOM costing.
+  // consumption (PAYG / On-demand) | reserved-1y | reserved-3y | savings-1y | savings-3y
+  purchaseModel   String   @default("consumption")
   // AI-classified engagement type — drives the suggested deliverable flow
   // (migration | greenfield | modernization | dr | poc | optimization | unknown)
   projectType            String?

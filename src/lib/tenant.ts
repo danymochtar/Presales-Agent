@@ -41,7 +41,7 @@ export async function ensureDefaultTenant(userId: string) {
         primary_clouds: ["Azure", "AWS"],
         iac_preference: { azure: "Bicep", aws: "Terraform", gcp: "Terraform" },
         default_regions: {
-          azure: { primary: "Malaysia Central", dr: "Southeast Asia" },
+          azure: { primary: "Malaysia West", dr: "Southeast Asia" },
           aws: { primary: "ap-southeast-5 (Malaysia)", dr: "ap-southeast-1 (Singapore)" },
           gcp: { primary: "asia-southeast2 (Jakarta)", dr: "asia-southeast1 (Singapore)" },
         },

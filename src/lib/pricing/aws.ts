@@ -130,13 +130,23 @@ export function getAwsVmPrice(
   if (term === "consumption") {
     hourly = (os === "linux" ? base.linuxHourly : base.windowsHourly) * m;
   } else {
-    const baseRi = term === "reservation-1y" ? base.ri1yLinuxHourly : base.ri3yLinuxHourly;
+    // RI 1y/3y rates are baked in; Savings Plan rates approximated as a
+    // small premium over RI (Compute SP gives most of RI's discount with
+    // cross-family flexibility — typical effective uplift ~3-5% vs RI).
+    let baseRi: number;
+    let label: string;
+    if (term === "reserved-1y") { baseRi = base.ri1yLinuxHourly; label = "RI 1y"; }
+    else if (term === "reserved-3y") { baseRi = base.ri3yLinuxHourly; label = "RI 3y"; }
+    else if (term === "savings-1y") { baseRi = base.ri1yLinuxHourly * 1.04; label = "Compute Savings Plan 1y (approx.)"; }
+    else { baseRi = base.ri3yLinuxHourly * 1.04; label = "Compute Savings Plan 3y (approx.)"; }
+
     if (os === "windows") {
       const winPremium = (base.windowsHourly - base.linuxHourly) * m;
       hourly = baseRi * m + winPremium;
-      notes.push("RI shown as Linux base + Windows license premium at on-demand rate (approximation)");
+      notes.push(`${label} shown as Linux base + Windows license premium at on-demand rate (approximation)`);
     } else {
       hourly = baseRi * m;
+      if (term.startsWith("savings-")) notes.push(`${label} estimate — verify against AWS Cost Explorer SP estimator`);
     }
   }
 

@@ -2,7 +2,23 @@
 
 export type CloudType = "azure" | "aws" | "gcp";
 export type OsType = "linux" | "windows";
-export type Term = "consumption" | "reservation-1y" | "reservation-3y";
+// Pricing commitment / purchase model. "consumption" = PAYG (Azure) or
+// On-demand (AWS). "reserved-Ny" = N-year Reserved Instance. "savings-Ny"
+// = N-year Savings Plan (Azure compute SP / AWS Compute SP).
+export type Term =
+  | "consumption"
+  | "reserved-1y"
+  | "reserved-3y"
+  | "savings-1y"
+  | "savings-3y";
+
+export const PURCHASE_MODEL_LABELS: Record<Term, string> = {
+  "consumption": "Pay-as-you-go",
+  "reserved-1y": "Reserved Instance (1-year)",
+  "reserved-3y": "Reserved Instance (3-year)",
+  "savings-1y":  "Savings Plan (1-year)",
+  "savings-3y":  "Savings Plan (3-year)",
+};
 
 export type ComputeQuoteFound = {
   found: true;
