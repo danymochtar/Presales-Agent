@@ -5,29 +5,122 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { gateway, DEFAULT_MODEL } from "@/lib/ai";
 import { GENERATE_PROPOSAL_SYSTEM } from "@/lib/prompts/generate-proposal";
+import type { CloudType } from "@/lib/pricing";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+// Pick the latest deliverable matching type+cloudProvider. Treats null
+// cloudProvider as "azure" for back-compat with pre-MVP-2 deliverables.
+function pickLatest<T extends { cloudProvider: string | null; version: number }>(
+  list: T[],
+  cloud: string,
+): T | undefined {
+  return list
+    .filter((d) => (cloud === "azure" ? d.cloudProvider === "azure" || d.cloudProvider === null : d.cloudProvider === cloud))
+    .sort((a, b) => b.version - a.version)[0];
+}
+
+export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return new Response("unauthorized", { status: 401 });
+
+  const url = new URL(req.url);
+  const cloudParam = url.searchParams.get("cloud") ?? "azure"; // azure | aws | compare
+  const requestedMode = url.searchParams.get("mode"); // single | compare | hybrid
 
   const { id } = await ctx.params;
   const project = await prisma.project.findFirst({
     where: { id, tenant: { users: { some: { id: session.user.id } } } },
     include: {
       tenant: { include: { patterns: { where: { active: true, deliverableType: "proposal" } } } },
-      deliverables: { where: { type: "bom" }, orderBy: { version: "desc" }, take: 1 },
+      deliverables: { orderBy: { version: "desc" } },
+      inputs: { orderBy: { createdAt: "desc" } },
     },
   });
   if (!project) return new Response("not found", { status: 404 });
   if (!project.tenant) return new Response("tenant missing", { status: 400 });
 
-  const latestBom = project.deliverables[0];
-  if (!latestBom) {
-    return new Response("no BOM yet — generate a BOM first; the proposal references it", { status: 400 });
+  const targetClouds = ((project.targetClouds as string[]) ?? ["azure"]).filter((c) => c !== "gcp") as CloudType[];
+
+  let cloudsInScope: CloudType[];
+  if (cloudParam === "compare") {
+    cloudsInScope = targetClouds;
+    if (cloudsInScope.length < 2) {
+      return new Response("compare mode needs at least 2 non-GCP target clouds", { status: 400 });
+    }
+  } else {
+    if (!targetClouds.includes(cloudParam as CloudType)) {
+      return new Response(`cloud "${cloudParam}" is not in this project's targetClouds`, { status: 400 });
+    }
+    cloudsInScope = [cloudParam as CloudType];
   }
+
+  // Gather upstream deliverables per cloud in scope (BOM is mandatory; arch
+  // and assessment are optional — proposal degrades gracefully but warns).
+  const boms = project.deliverables.filter((d) => d.type === "bom");
+  const archs = project.deliverables.filter((d) => d.type === "architecture");
+  const assess = project.deliverables.filter((d) => d.type === "assessment");
+
+  const upstreamByCloud: Record<string, { bom: typeof project.deliverables[number] | null; arch: typeof project.deliverables[number] | null; assess: typeof project.deliverables[number] | null }> = {};
+  for (const c of cloudsInScope) {
+    upstreamByCloud[c] = {
+      bom: pickLatest(boms, c) ?? null,
+      arch: pickLatest(archs, c) ?? null,
+      assess: pickLatest(assess, c) ?? null,
+    };
+  }
+
+  // For compare mode, also accept a "compare" BOM if generated (which already
+  // has side-by-side cost summary across clouds).
+  const compareBom = pickLatest(boms, "compare") ?? null;
+
+  // Validate: at least one BOM somewhere in scope, otherwise we can't talk pricing.
+  const haveAnyBom = cloudsInScope.some((c) => upstreamByCloud[c].bom) || !!compareBom;
+  if (!haveAnyBom) {
+    return new Response(
+      "no BOM yet — generate a BOM first; the proposal references it for all pricing",
+      { status: 400 },
+    );
+  }
+
+  let mode: "single" | "compare" | "hybrid";
+  if (requestedMode === "single" || requestedMode === "compare" || requestedMode === "hybrid") {
+    mode = requestedMode;
+  } else {
+    mode = cloudsInScope.length === 1 ? "single" : "compare";
+  }
+
+  // Build context blocks per cloud
+  const upstreamBlocks: string[] = [];
+  for (const c of cloudsInScope) {
+    const u = upstreamByCloud[c];
+    const parts: string[] = [`### ${c.toUpperCase()} upstream deliverables`];
+    if (u.bom) {
+      parts.push(`#### BOM v${u.bom.version} (cloud=${u.bom.cloudProvider ?? "azure"})\n\`\`\`markdown\n${u.bom.contentMd.slice(0, 16_000)}\n\`\`\``);
+    } else {
+      parts.push(`_No BOM for ${c} yet — pricing will reference whichever BOM exists; flag the gap in Assumptions._`);
+    }
+    if (u.arch) {
+      parts.push(`#### Architecture v${u.arch.version} (cloud=${u.arch.cloudProvider ?? "azure"})\n\`\`\`markdown\n${u.arch.contentMd.slice(0, 8_000)}\n\`\`\``);
+    } else {
+      parts.push(`_No architecture for ${c} yet — keep solution overview at conceptual level._`);
+    }
+    if (u.assess) {
+      parts.push(`#### Assessment v${u.assess.version} (cloud=${u.assess.cloudProvider ?? "azure"})\n\`\`\`markdown\n${u.assess.contentMd.slice(0, 6_000)}\n\`\`\``);
+    } else {
+      parts.push(`_No assessment for ${c} yet — proposal will summarize approach at high level._`);
+    }
+    upstreamBlocks.push(parts.join("\n\n"));
+  }
+  if (compareBom && mode === "compare") {
+    upstreamBlocks.push(`### Compare BOM v${compareBom.version} (side-by-side across clouds)\n\`\`\`markdown\n${compareBom.contentMd.slice(0, 16_000)}\n\`\`\``);
+  }
+
+  // Customer context docs (RFP, notes, requirements)
+  const contextDocs = project.inputs
+    .filter((i) => i.textContent && i.textContent.trim().length > 0)
+    .map((i) => ({ kind: i.kind, filename: i.filename ?? "(unnamed)", text: i.textContent!.slice(0, 6000) }));
 
   const tenantContext = {
     tenant: {
@@ -48,26 +141,29 @@ export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: strin
 
   const userMessage = `# Generate proposal for project: ${project.name}
 
+mode: ${mode}
+clouds: [${cloudsInScope.join(", ")}]
+primaryCloud: ${project.primaryCloud ?? "(not yet decided)"}
+
 ## Project
 - Customer: ${project.customer}
 - Industry: ${project.industry ?? "(not specified)"}
-- Primary region: ${project.primaryRegion}
-- DR region: ${project.drRegion}
+- Customer segment: ${project.customerSegment ?? "(not specified)"}
 - Scope summary: ${project.scopeSummary ?? "(not specified)"}
 
-## Tenant context (apply identity, compliance posture, voice, learned patterns)
+## Tenant context (apply identity, voice, partner tier, compliance, learned patterns)
 \`\`\`json
 ${JSON.stringify(tenantContext, null, 2)}
 \`\`\`
 
-## Latest BOM (v${latestBom.version}) — single source of pricing truth
-The proposal MUST reference this BOM for all numbers. Do not invent prices.
+## Upstream deliverables per cloud (single source of pricing + technical truth)
 
-\`\`\`markdown
-${latestBom.contentMd}
-\`\`\`
+${upstreamBlocks.join("\n\n---\n\n")}
 
-Generate the proposal now in Markdown following the standard structure. Keep tone customer-facing. Apply learned patterns where applicable.
+${contextDocs.length > 0 ? `## Customer context from uploaded documents
+${contextDocs.map((d) => `### ${d.filename} (${d.kind})\n${d.text}`).join("\n\n---\n\n")}
+` : ""}
+Generate the proposal now in Markdown following the **${mode}** mode structure. Reference upstream deliverables explicitly (e.g. "as detailed in BOM v3"). Apply learned patterns where applicable.
 `;
 
   const result = streamText({
@@ -93,8 +189,9 @@ Generate the proposal now in Markdown following the standard structure. Keep ton
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ delta: chunk })}\n\n`));
         }
 
+        const cloudProvider = cloudParam === "compare" ? "compare" : cloudParam;
         const last = await prisma.deliverable.findFirst({
-          where: { projectId: project.id, type: "proposal" },
+          where: { projectId: project.id, type: "proposal", cloudProvider },
           orderBy: { version: "desc" },
         });
         const version = (last?.version ?? 0) + 1;
@@ -102,19 +199,24 @@ Generate the proposal now in Markdown following the standard structure. Keep ton
           data: {
             projectId: project.id,
             type: "proposal",
+            cloudProvider,
             version,
             status: "draft",
             contentMd: fullText,
             metadata: {
-              sourceBomId: latestBom.id,
-              sourceBomVersion: latestBom.version,
+              mode,
+              clouds: cloudsInScope,
+              sourceBomIds: cloudsInScope.map((c) => upstreamByCloud[c].bom?.id).filter(Boolean),
+              sourceArchIds: cloudsInScope.map((c) => upstreamByCloud[c].arch?.id).filter(Boolean),
+              sourceAssessmentIds: cloudsInScope.map((c) => upstreamByCloud[c].assess?.id).filter(Boolean),
+              compareBomId: compareBom?.id ?? null,
               generatedAt: new Date().toISOString(),
               model: DEFAULT_MODEL,
-            },
+            } as object,
           },
         });
 
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, deliverableId: saved.id, version })}\n\n`));
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, deliverableId: saved.id, version, cloudProvider })}\n\n`));
         controller.close();
       } catch (err) {
         controller.enqueue(

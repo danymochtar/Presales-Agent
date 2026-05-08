@@ -117,6 +117,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           title="Proposal"
           items={proposals}
           basePath={`/projects/${project.id}/proposal`}
+          showCloud
           emptyMsg={hasBom ? "Compose proposal from BOM" : "BOM first"}
         />
       </div>
