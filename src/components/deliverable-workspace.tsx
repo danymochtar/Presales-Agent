@@ -3,12 +3,14 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { TrainingPanel } from "@/components/training-panel";
 
 type Version = { id: string; version: number; status: string; createdAt: string };
 
 export function DeliverableWorkspace({
   projectId,
   projectName,
+  projectMode,
   deliverableType,
   generatePath,
   prerequisiteMessage,
@@ -20,6 +22,7 @@ export function DeliverableWorkspace({
 }: {
   projectId: string;
   projectName: string;
+  projectMode: "production" | "training";
   deliverableType: "bom" | "proposal" | "architecture" | "assessment" | "project_plan";
   generatePath: string;
   prerequisiteMessage: string | null;
@@ -144,6 +147,14 @@ export function DeliverableWorkspace({
           </CardContent>
         </Card>
       </div>
+
+      {projectMode === "training" && display && !streaming && (
+        <TrainingPanel
+          projectId={projectId}
+          deliverableType={deliverableType}
+          draftContent={selectedContent}
+        />
+      )}
     </div>
   );
 }

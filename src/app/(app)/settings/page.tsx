@@ -63,9 +63,7 @@ export default async function SettingsPage() {
             <CardTitle className="text-3xl">{patternCount}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-xs text-muted-foreground">
-              Grow via training projects (Phase 2.5). Currently read-only.
-            </p>
+            <Link href="/settings/patterns" className="text-sm underline">Manage patterns</Link>
           </CardContent>
         </Card>
       </div>

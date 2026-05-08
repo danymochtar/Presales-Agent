@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { UploadInputForm } from "@/components/upload-input-form";
+import { ProjectModeToggle } from "@/components/project-mode-toggle";
 
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -15,12 +16,14 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     include: {
       inputs: { orderBy: { createdAt: "desc" } },
       deliverables: { orderBy: [{ type: "asc" }, { version: "desc" }] },
+      feedback: { orderBy: { createdAt: "desc" }, take: 5 },
     },
   });
   if (!project) notFound();
 
   const boms = project.deliverables.filter((d) => d.type === "bom");
   const proposals = project.deliverables.filter((d) => d.type === "proposal");
+  const architectures = project.deliverables.filter((d) => d.type === "architecture");
   const latestInput = project.inputs[0];
   const latestBom = boms[0];
 
@@ -29,15 +32,15 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">{project.name}</h1>
-          <p className="text-sm text-muted-foreground">{project.customer} · {project.industry ?? "—"} · {project.primaryRegion} → {project.drRegion}</p>
+          <p className="text-sm text-muted-foreground">
+            {project.customer} · {project.industry ?? "—"} · {project.primaryRegion} → {project.drRegion} · stage: {project.stage}
+          </p>
         </div>
-        <div className="flex gap-2">
-          <Button asChild variant="outline">
-            <Link href={`/projects/${project.id}/bom`}>BOM</Link>
-          </Button>
-          <Button asChild variant={latestBom ? "outline" : "ghost"}>
-            <Link href={`/projects/${project.id}/proposal`}>Proposal</Link>
-          </Button>
+        <div className="flex gap-2 items-center">
+          <ProjectModeToggle projectId={project.id} initialMode={project.mode as "production" | "training"} />
+          <Button asChild variant="outline" size="sm"><Link href={`/projects/${project.id}/bom`}>BOM</Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href={`/projects/${project.id}/architecture`}>Architecture</Link></Button>
+          <Button asChild variant={latestBom ? "outline" : "ghost"} size="sm"><Link href={`/projects/${project.id}/proposal`}>Proposal</Link></Button>
         </div>
       </div>
 
@@ -58,49 +61,68 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader><CardTitle>BOMs ({boms.length})</CardTitle></CardHeader>
-          <CardContent>
-            {boms.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No BOM yet. {latestInput ? "Open BOM page to generate." : "Upload an inventory first."}</p>
-            ) : (
-              <ul className="divide-y text-sm">
-                {boms.map((b) => (
-                  <li key={b.id} className="py-2 flex justify-between items-center">
-                    <Link href={`/projects/${project.id}/bom?v=${b.version}`} className="hover:underline">
-                      v{b.version} <span className="text-muted-foreground">· {b.status}</span>
-                    </Link>
-                    <span className="text-xs text-muted-foreground">{new Date(b.createdAt).toLocaleString()}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader><CardTitle>Proposals ({proposals.length})</CardTitle></CardHeader>
-          <CardContent>
-            {proposals.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No proposal yet. {latestBom ? "Open Proposal page to generate." : "Generate a BOM first — proposal references it."}
-              </p>
-            ) : (
-              <ul className="divide-y text-sm">
-                {proposals.map((p) => (
-                  <li key={p.id} className="py-2 flex justify-between items-center">
-                    <Link href={`/projects/${project.id}/proposal?v=${p.version}`} className="hover:underline">
-                      v{p.version} <span className="text-muted-foreground">· {p.status}</span>
-                    </Link>
-                    <span className="text-xs text-muted-foreground">{new Date(p.createdAt).toLocaleString()}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <DeliverableCard title="BOMs" items={boms} basePath={`/projects/${project.id}/bom`} emptyMsg={latestInput ? "Open BOM page to generate." : "Upload an inventory first."} />
+        <DeliverableCard title="Architectures" items={architectures} basePath={`/projects/${project.id}/architecture`} emptyMsg="Open Architecture page to generate." />
+        <DeliverableCard title="Proposals" items={proposals} basePath={`/projects/${project.id}/proposal`} emptyMsg={latestBom ? "Open Proposal page to generate." : "Generate a BOM first."} />
       </div>
+
+      {project.feedback.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle>Recent training feedback</CardTitle></CardHeader>
+          <CardContent>
+            <ul className="space-y-2 text-sm">
+              {project.feedback.map((f) => {
+                const patterns = Array.isArray(f.extractedPatterns) ? f.extractedPatterns : [];
+                return (
+                  <li key={f.id} className="border-l-2 border-primary pl-3">
+                    <p>
+                      <span className="font-medium capitalize">{f.deliverableType}</span> ·{" "}
+                      <span className="text-muted-foreground text-xs">{new Date(f.createdAt).toLocaleString()}</span> ·{" "}
+                      <span className="text-muted-foreground text-xs">{patterns.length} pattern(s) saved</span>
+                    </p>
+                    <p className="text-muted-foreground italic">"{f.feedback.slice(0, 160)}{f.feedback.length > 160 ? "…" : ""}"</p>
+                  </li>
+                );
+              })}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
     </div>
+  );
+}
+
+function DeliverableCard({
+  title,
+  items,
+  basePath,
+  emptyMsg,
+}: {
+  title: string;
+  items: { id: string; version: number; status: string; createdAt: Date }[];
+  basePath: string;
+  emptyMsg: string;
+}) {
+  return (
+    <Card>
+      <CardHeader><CardTitle>{title} ({items.length})</CardTitle></CardHeader>
+      <CardContent>
+        {items.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{emptyMsg}</p>
+        ) : (
+          <ul className="divide-y text-sm">
+            {items.map((d) => (
+              <li key={d.id} className="py-2 flex justify-between items-center">
+                <Link href={`${basePath}?v=${d.version}`} className="hover:underline">
+                  v{d.version} <span className="text-muted-foreground">· {d.status}</span>
+                </Link>
+                <span className="text-xs text-muted-foreground">{new Date(d.createdAt).toLocaleString()}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
   );
 }

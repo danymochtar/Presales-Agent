@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { DeliverableWorkspace } from "@/components/deliverable-workspace";
 
-export default async function ProposalPage({
+export default async function ArchitecturePage({
   params,
   searchParams,
 }: {
@@ -17,25 +17,23 @@ export default async function ProposalPage({
   const project = await prisma.project.findFirst({
     where: { id, tenant: { users: { some: { id: session!.user.id } } } },
     include: {
-      deliverables: { orderBy: [{ type: "asc" }, { version: "desc" }] },
+      deliverables: { where: { type: "architecture" }, orderBy: { version: "desc" } },
     },
   });
   if (!project) notFound();
 
-  const proposals = project.deliverables.filter((d) => d.type === "proposal");
-  const latestBom = project.deliverables.find((d) => d.type === "bom");
-  const selected = v ? proposals.find((d) => d.version === Number(v)) : proposals[0];
+  const selected = v ? project.deliverables.find((d) => d.version === Number(v)) : project.deliverables[0];
 
   return (
     <DeliverableWorkspace
       projectId={project.id}
       projectName={project.name}
       projectMode={project.mode as "production" | "training"}
-      deliverableType="proposal"
-      generatePath={`/api/projects/${project.id}/proposal/generate`}
-      canGenerate={!!latestBom}
-      prerequisiteMessage={latestBom ? null : "Generate a BOM first — the proposal references it for pricing."}
-      versions={proposals.map((d) => ({ id: d.id, version: d.version, status: d.status, createdAt: d.createdAt.toISOString() }))}
+      deliverableType="architecture"
+      generatePath={`/api/projects/${project.id}/architecture/generate`}
+      canGenerate={true}
+      prerequisiteMessage={null}
+      versions={project.deliverables.map((d) => ({ id: d.id, version: d.version, status: d.status, createdAt: d.createdAt.toISOString() }))}
       selectedContent={selected?.contentMd ?? null}
       selectedVersion={selected?.version ?? null}
       selectedDeliverableId={selected?.id ?? null}
