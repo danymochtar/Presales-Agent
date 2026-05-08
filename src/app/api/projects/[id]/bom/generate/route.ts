@@ -5,23 +5,34 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { gateway, DEFAULT_MODEL } from "@/lib/ai";
 import { GENERATE_BOM_SYSTEM } from "@/lib/prompts/generate-bom";
-import { batchVmPrices } from "@/lib/pricing/azure";
+import { batchPriceCompute, azureLabelToArm, type CloudType } from "@/lib/pricing";
 import { fxRateOrFallback, usdTo } from "@/lib/pricing/fx";
-import { recommendSku } from "@/lib/inventory/sizing";
+import { recommendSkuForCloud } from "@/lib/inventory/sizing";
 import type { Workload, WorkloadSet } from "@/lib/inventory/workload";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const REGION_TO_ARM: Record<string, string> = {
-  "Malaysia Central": "malaysiacentral",
-  "Southeast Asia": "southeastasia",
-  "East Asia": "eastasia",
+type CloudRegions = Record<string, { primary: string; dr: string } | undefined>;
+
+const PRICING_REGION_DEFAULTS: Record<CloudType, { primary: string; dr: string }> = {
+  azure: { primary: "malaysiacentral", dr: "southeastasia" },
+  aws:   { primary: "ap-southeast-5",   dr: "ap-southeast-1" },
+  gcp:   { primary: "asia-southeast2",  dr: "asia-southeast1" },
 };
 
-export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+function pricingRegion(cloud: CloudType, label: string | undefined): string {
+  if (!label) return PRICING_REGION_DEFAULTS[cloud].primary;
+  if (cloud === "azure") return azureLabelToArm(label);
+  return label; // AWS/GCP region codes are passed through verbatim
+}
+
+export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return new Response("unauthorized", { status: 401 });
+
+  const url = new URL(req.url);
+  const cloudParam = url.searchParams.get("cloud") ?? "azure"; // azure | aws | gcp | compare
 
   const { id } = await ctx.params;
   const project = await prisma.project.findFirst({
@@ -40,21 +51,51 @@ export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: strin
     return new Response("no workloads — upload an inventory first", { status: 400 });
   }
 
-  const workloads: Workload[] = workloadSet.workloads.map((w) => ({
-    ...w,
-    recommendedSku: w.recommendedSku ?? recommendSku(w.cpu, w.ramGb),
-  }));
+  const targetClouds = (project.targetClouds ?? ["azure"]) as CloudType[];
+  const cloudRegions = (project.cloudRegions as CloudRegions | null) ?? {};
 
-  const armRegion = REGION_TO_ARM[project.primaryRegion] ?? "malaysiacentral";
-  const linuxSkus = [...new Set(workloads.filter((w) => w.os === "linux" || w.os === "other").map((w) => w.recommendedSku!))];
-  const windowsSkus = [...new Set(workloads.filter((w) => w.os === "windows").map((w) => w.recommendedSku!))];
-
-  const [linuxPrices, windowsPrices] = await Promise.all([
-    linuxSkus.length ? batchVmPrices(linuxSkus, armRegion, "linux", "consumption") : Promise.resolve({}),
-    windowsSkus.length ? batchVmPrices(windowsSkus, armRegion, "windows", "consumption") : Promise.resolve({}),
-  ]);
+  let cloudsToPrice: CloudType[];
+  if (cloudParam === "compare") {
+    cloudsToPrice = targetClouds.filter((c) => c !== "gcp");
+    if (cloudsToPrice.length < 2) {
+      return new Response("compare mode needs at least 2 target clouds (and GCP is deferred)", { status: 400 });
+    }
+  } else {
+    if (!targetClouds.includes(cloudParam as CloudType)) {
+      return new Response(`cloud "${cloudParam}" is not in this project's targetClouds`, { status: 400 });
+    }
+    if (cloudParam === "gcp") return new Response("GCP pricing deferred — defer to MVP 14+", { status: 501 });
+    cloudsToPrice = [cloudParam as CloudType];
+  }
 
   const fxRate = fxRateOrFallback("MYR", project.tenant.fxMyrPerUsd);
+  const pricingByCloud: Record<string, unknown> = {};
+
+  for (const cloud of cloudsToPrice) {
+    const labelPrimary = cloudRegions[cloud]?.primary;
+    const region = pricingRegion(cloud, labelPrimary);
+    const sizedWorkloads: Workload[] = workloadSet.workloads.map((w) => ({
+      ...w,
+      recommendedSku: recommendSkuForCloud(cloud, w.cpu, w.ramGb),
+    }));
+
+    const linuxSkus = [...new Set(sizedWorkloads.filter((w) => w.os === "linux" || w.os === "other").map((w) => w.recommendedSku!))];
+    const winSkus = [...new Set(sizedWorkloads.filter((w) => w.os === "windows").map((w) => w.recommendedSku!))];
+
+    const [linuxPrices, winPrices] = await Promise.all([
+      linuxSkus.length ? batchPriceCompute(cloud, linuxSkus, region, "linux", "consumption") : Promise.resolve({}),
+      winSkus.length ? batchPriceCompute(cloud, winSkus, region, "windows", "consumption") : Promise.resolve({}),
+    ]);
+
+    pricingByCloud[cloud] = {
+      regionLabel: labelPrimary ?? PRICING_REGION_DEFAULTS[cloud].primary,
+      regionPricingId: region,
+      drRegion: cloudRegions[cloud]?.dr ?? PRICING_REGION_DEFAULTS[cloud].dr,
+      sizedWorkloads,
+      prices: { linux: linuxPrices, windows: winPrices },
+    };
+  }
+
   const tenantContext = {
     tenant: {
       name: project.tenant.name,
@@ -76,13 +117,16 @@ export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: strin
     })),
   };
 
-  const userMessage = `# Generate BOM for project: ${project.name}
+  const mode = cloudParam === "compare" ? "compare" : "single";
+  const userMessage = `# Generate ${mode === "compare" ? "comparison" : "single-cloud"} BOM for project: ${project.name}
+
+mode: ${mode}
+clouds: [${cloudsToPrice.join(", ")}]
 
 ## Project
 - Customer: ${project.customer}
 - Industry: ${project.industry ?? "(not specified)"}
-- Primary region: ${project.primaryRegion} (ARM: ${armRegion})
-- DR region: ${project.drRegion}
+- Customer segment: ${project.customerSegment ?? "(not specified)"}
 - Scope summary: ${project.scopeSummary ?? "(not specified)"}
 
 ## Tenant context (apply rate card, catalog, patterns, guardrails)
@@ -93,14 +137,9 @@ ${JSON.stringify(tenantContext, null, 2)}
 ## Workload inventory
 Total: ${workloadSet.totals.count} workloads, ${workloadSet.totals.cpu} vCPU, ${workloadSet.totals.ramGb} GB RAM, ${workloadSet.totals.storageGb} GB storage. OS mix: ${JSON.stringify(workloadSet.totals.osMix)}.
 
+## Per-cloud sized workloads + live prices
 \`\`\`json
-${JSON.stringify(workloads, null, 2)}
-\`\`\`
-
-## Live Azure Retail prices (USD, region: ${armRegion})
-PAYG hourly + computed monthly (730h). Use ONLY these prices; do not invent.
-\`\`\`json
-${JSON.stringify({ linux: linuxPrices, windows: windowsPrices }, null, 2)}
+${JSON.stringify(pricingByCloud, null, 2)}
 \`\`\`
 
 ## FX
@@ -108,7 +147,7 @@ ${JSON.stringify({ linux: linuxPrices, windows: windowsPrices }, null, 2)}
 - Show MYR equivalent in parentheses next to USD totals.
 - Example: USD 1,234.56 (MYR ${usdTo(1234.56, "MYR", project.tenant.fxMyrPerUsd).toLocaleString()})
 
-Generate the BOM now in Markdown following the standard structure. Apply learned patterns where applicable.
+Generate the BOM now in Markdown following the **${mode}-mode** structure. Apply learned patterns where applicable.
 `;
 
   const result = streamText({
@@ -117,10 +156,7 @@ Generate the BOM now in Markdown following the standard structure. Apply learned
       {
         role: "system",
         content: GENERATE_BOM_SYSTEM,
-        providerOptions: {
-          // Anthropic prompt caching for the long system prompt.
-          anthropic: { cacheControl: { type: "ephemeral" } },
-        },
+        providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } },
       },
       { role: "user", content: userMessage },
     ],
@@ -137,8 +173,9 @@ Generate the BOM now in Markdown following the standard structure. Apply learned
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ delta: chunk })}\n\n`));
         }
 
+        const cloudProvider = cloudParam === "compare" ? "compare" : (cloudParam as string);
         const last = await prisma.deliverable.findFirst({
-          where: { projectId: project.id, type: "bom" },
+          where: { projectId: project.id, type: "bom", cloudProvider },
           orderBy: { version: "desc" },
         });
         const version = (last?.version ?? 0) + 1;
@@ -146,21 +183,22 @@ Generate the BOM now in Markdown following the standard structure. Apply learned
           data: {
             projectId: project.id,
             type: "bom",
+            cloudProvider,
             version,
             status: "draft",
             contentMd: fullText,
             metadata: {
-              region: armRegion,
+              clouds: cloudsToPrice,
               fxMyrPerUsd: fxRate,
-              priceSnapshot: { linux: linuxPrices, windows: windowsPrices },
+              priceSnapshot: pricingByCloud as object,
               workloadCount: workloadSet.totals.count,
               generatedAt: new Date().toISOString(),
               model: DEFAULT_MODEL,
-            },
+            } as object,
           },
         });
 
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, deliverableId: saved.id, version })}\n\n`));
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, deliverableId: saved.id, version, cloudProvider })}\n\n`));
         controller.close();
       } catch (err) {
         controller.enqueue(

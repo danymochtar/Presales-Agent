@@ -219,9 +219,10 @@ model Deliverable {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  // MVP 1 keeps the legacy compound unique. MVP 2 (multi-cloud BOM) extends
-  // this to include cloudProvider so per-cloud versions can coexist.
-  @@unique([projectId, type, version])
+  // MVP 2: per-cloud versions coexist via cloudProvider in the unique key.
+  // Postgres treats multiple NULLs as distinct, so legacy rows with
+  // cloudProvider=null don't conflict with new rows that set it explicitly.
+  @@unique([projectId, type, cloudProvider, version])
   @@index([projectId, type])
 }
 

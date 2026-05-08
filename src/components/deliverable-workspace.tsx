@@ -1,11 +1,13 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrainingPanel } from "@/components/training-panel";
 
 type Version = { id: string; version: number; status: string; createdAt: string };
+type CloudTab = { id: string; label: string };
 
 export function DeliverableWorkspace({
   projectId,
@@ -19,6 +21,9 @@ export function DeliverableWorkspace({
   selectedContent,
   selectedVersion,
   selectedDeliverableId,
+  cloudTabs,
+  activeCloud,
+  basePath,
 }: {
   projectId: string;
   projectName: string;
@@ -31,6 +36,9 @@ export function DeliverableWorkspace({
   selectedContent: string | null;
   selectedVersion: number | null;
   selectedDeliverableId: string | null;
+  cloudTabs?: CloudTab[];
+  activeCloud?: string | null;
+  basePath?: string;
 }) {
   const router = useRouter();
   const [streaming, setStreaming] = useState(false);
@@ -90,7 +98,10 @@ export function DeliverableWorkspace({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">{label} — {projectName}</h1>
+          <h1 className="text-2xl font-semibold">
+            {label} — {projectName}
+            {activeCloud && <span className="ml-2 text-base font-normal text-muted-foreground">· {activeCloud}</span>}
+          </h1>
           <p className="text-sm text-muted-foreground">
             {versions.length === 0 ? "No versions yet" : `Latest v${versions[0].version} · ${versions.length} version(s)`}
           </p>
@@ -107,6 +118,22 @@ export function DeliverableWorkspace({
         </div>
       </div>
 
+      {cloudTabs && cloudTabs.length > 0 && basePath && (
+        <div className="flex gap-1 border-b">
+          {cloudTabs.map((c) => (
+            <Link
+              key={c.id}
+              href={`${basePath}?cloud=${c.id}`}
+              className={`px-3 py-2 text-sm border-b-2 -mb-[1px] transition ${
+                activeCloud === c.id ? "border-primary font-medium" : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {c.label}
+            </Link>
+          ))}
+        </div>
+      )}
+
       {!canGenerate && prerequisiteMessage && (
         <p className="text-sm text-muted-foreground border rounded p-3">{prerequisiteMessage}</p>
       )}
@@ -121,16 +148,21 @@ export function DeliverableWorkspace({
               <p className="text-xs text-muted-foreground">none</p>
             ) : (
               <ul className="space-y-1 text-sm">
-                {versions.map((v) => (
-                  <li key={v.id}>
-                    <a
-                      href={`?v=${v.version}`}
-                      className={`block rounded px-2 py-1 hover:bg-accent ${v.version === selectedVersion ? "bg-accent" : ""}`}
-                    >
-                      v{v.version} <span className="text-xs text-muted-foreground">· {v.status}</span>
-                    </a>
-                  </li>
-                ))}
+                {versions.map((v) => {
+                  const params = new URLSearchParams();
+                  params.set("v", String(v.version));
+                  if (activeCloud) params.set("cloud", activeCloud);
+                  return (
+                    <li key={v.id}>
+                      <a
+                        href={`?${params.toString()}`}
+                        className={`block rounded px-2 py-1 hover:bg-accent ${v.version === selectedVersion ? "bg-accent" : ""}`}
+                      >
+                        v{v.version} <span className="text-xs text-muted-foreground">· {v.status}</span>
+                      </a>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </CardContent>
