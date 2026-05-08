@@ -9,7 +9,7 @@ import {
   type DeliverableKind,
 } from "@/lib/deliverable-prereqs";
 
-export const metadata = { title: "Petunjuk · Noventiq Multicloud Agent" };
+export const metadata = { title: "Guide · Noventiq Multicloud Agent" };
 
 const NEED_ORDER: (keyof typeof NEED_LABELS)[] = [
   "customer", "scope", "inventory", "clouds", "regions", "purchaseModel", "onPremBaseline",
@@ -22,35 +22,35 @@ export default function HelpPage() {
   return (
     <div className="space-y-6 max-w-4xl">
       <div>
-        <h1 className="text-xl md:text-2xl font-semibold">Petunjuk pakai</h1>
+        <h1 className="text-xl md:text-2xl font-semibold">How to use</h1>
         <p className="text-sm text-muted-foreground">
-          Quick reference biar nggak bingung. Skim sekali, balik ke sini kalau lupa.
+          Quick reference so you don&apos;t get stuck. Skim once, come back when you need a refresher.
         </p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Mulai dari mana?</CardTitle>
-          <CardDescription>Dua entry point di dashboard. Pilih sesuai ask.</CardDescription>
+          <CardTitle className="text-base">Where to start</CardTitle>
+          <CardDescription>Two entry points on the dashboard. Pick whichever matches your ask.</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
           <div className="rounded-md border p-3 space-y-2">
             <div className="font-medium">A. Full project</div>
             <p className="text-muted-foreground">
-              Upload semua doc customer (RFP, RVTools, Azure Migrate, meeting notes).
-              AI klasifikasi tipe engagement + kasih flow yang disarankan, lalu lo run
+              Upload every customer document you have (RFP, RVTools, Azure Migrate, meeting notes).
+              The agent classifies the engagement type, recommends a deliverable flow, then runs the
               pipeline end-to-end.
             </p>
-            <p className="text-xs"><strong>Pakai kalau:</strong> ngerjain deal lengkap dari Discover sampai SOW.</p>
+            <p className="text-xs"><strong>Use when:</strong> working a real deal from Discover through SOW.</p>
             <Link href="/projects/new" className="inline-block text-xs underline">→ /projects/new</Link>
           </div>
           <div className="rounded-md border p-3 space-y-2">
             <div className="font-medium">B. Quick generate</div>
             <p className="text-muted-foreground">
-              Pilih SATU deliverable (BOM aja kah, SOW aja kah). Kasih prereqs-nya doang,
-              langsung dapat dokumen. Bikin project "Quick: …" di list buat audit trail.
+              Pick ONE deliverable (BOM only, SOW only, etc.). Supply just its prerequisites and get the
+              document. Creates a &ldquo;Quick: …&rdquo; project in your list for the audit trail.
             </p>
-            <p className="text-xs"><strong>Pakai kalau:</strong> cuma butuh satu doc, atau testing format, atau cepet bikin proposal dari scope yang udah ada.</p>
+            <p className="text-xs"><strong>Use when:</strong> you only need one document, want to test an output format, or are turning an existing scope into a quick proposal.</p>
             <Link href="/quick" className="inline-block text-xs underline">→ /quick</Link>
           </div>
         </CardContent>
@@ -60,12 +60,12 @@ export default function HelpPage() {
         <CardHeader><CardTitle className="text-base">Step-by-step: Full project</CardTitle></CardHeader>
         <CardContent>
           <ol className="text-sm space-y-2 list-decimal pl-5">
-            <li>Dashboard → klik <strong>Start a new engagement</strong>.</li>
-            <li>Upload file (xlsx, docx, pdf, csv, txt — multi-file boleh, max 10MB per file).</li>
-            <li>Klik <strong>Extract project details</strong> — AI baca isinya dan menebak: customer, industri, target cloud, region, tipe project, flow yang disarankan.</li>
-            <li>Review form — chip merah/kuning di samping field artinya AI tidak yakin; cek manual. Pilih target cloud + region + purchase model.</li>
-            <li>Klik <strong>Create project</strong>. Otomatis pindah ke project detail.</li>
-            <li>Di project detail: klik <strong>Run pipeline</strong> buat generate semua deliverable yang disarankan, atau klik card individual buat generate satu-satu.</li>
+            <li>From the dashboard click <strong>Start a new engagement</strong>.</li>
+            <li>Upload your files (xlsx, docx, pdf, csv, txt — multiple files OK, 10MB per file).</li>
+            <li>Click <strong>Extract project details</strong>. The agent reads each file and proposes: customer, industry, target cloud, region, project type, and a recommended deliverable flow.</li>
+            <li>Review the form. Yellow / red chips next to a field mean the agent isn&apos;t confident — verify those manually. Pick target clouds + regions + purchase model.</li>
+            <li>Click <strong>Create project</strong>. You land on the project detail page.</li>
+            <li>From there, click <strong>Run pipeline</strong> to generate every recommended deliverable, or click an individual card to generate one at a time.</li>
           </ol>
         </CardContent>
       </Card>
@@ -74,21 +74,21 @@ export default function HelpPage() {
         <CardHeader><CardTitle className="text-base">Step-by-step: Quick generate</CardTitle></CardHeader>
         <CardContent>
           <ol className="text-sm space-y-2 list-decimal pl-5">
-            <li>Dashboard → klik <strong>Quick generate one document</strong>.</li>
-            <li>Pilih deliverable dari grid — tiap card nunjukin "Needs: …".</li>
-            <li>Form muncul dengan field yang dibutuhin doang (customer, scope, inventory upload, cloud, region, purchase model, on-prem baseline — sesuai deliverable yang dipilih).</li>
-            <li>Klik <strong>Generate</strong> → streams realtime → redirect ke halaman deliverable saat selesai.</li>
-            <li>Project "Quick: …" muncul di Projects list. Bisa di-promote jadi full project belakangan dengan tambah upload + generate deliverable lain.</li>
+            <li>From the dashboard click <strong>Quick generate one document</strong>.</li>
+            <li>Pick a deliverable from the grid — each card shows &ldquo;Needs: …&rdquo;.</li>
+            <li>The form renders only the fields that deliverable actually needs (customer, scope, inventory upload, cloud, region, purchase model, on-prem baseline — depending on selection).</li>
+            <li>Click <strong>Generate</strong>. Output streams in real time and you&apos;re redirected to the deliverable page when it finishes.</li>
+            <li>A &ldquo;Quick: …&rdquo; project appears in the Projects list. You can promote it into a full project later by uploading more documents and generating additional deliverables.</li>
           </ol>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Tiap deliverable butuh apa?</CardTitle>
+          <CardTitle className="text-base">What does each deliverable need?</CardTitle>
           <CardDescription>
-            Dipakai oleh wizard Quick + workflow pipeline buat tau apa yang harus diminta dari user.
-            Tabel ini selalu sync dengan kode (di-render dari catalog).
+            Used by both the Quick wizard and the Full pipeline to know what to ask for.
+            This table is rendered straight from the catalog so it stays in sync with the code.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -135,17 +135,17 @@ export default function HelpPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Sebelum mulai (superadmin)</CardTitle>
-          <CardDescription>Output AI lebih bagus kalau ini sudah diisi.</CardDescription>
+          <CardTitle className="text-base">Before you start (superadmin)</CardTitle>
+          <CardDescription>The agent produces better output when these are configured.</CardDescription>
         </CardHeader>
         <CardContent>
           <ul className="text-sm space-y-1.5 list-disc pl-5">
-            <li><Link href="/settings/rate-card" className="underline">Rate card</Link> — daily rate per role/level/lokasi. Dipakai untuk kalkulasi mandays di BOM, project plan, SOW.</li>
-            <li><Link href="/settings/service-catalog" className="underline">Service catalog</Link> — default mandays per service. Bikin estimasi konsisten antar project.</li>
-            <li><Link href="/admin/templates" className="underline">Templates</Link> (admin) — upload sample BOM/Proposal/Architecture/SOW. AI niru struktur + voice.</li>
-            <li><Link href="/admin/users" className="underline">Users</Link> (admin) — promote presales head ke superadmin biar bisa kelola template + monitor cost.</li>
-            <li><Link href="/admin/usage" className="underline">Usage</Link> (admin) — monitor token + estimasi cost AI per purpose / per user.</li>
-            <li><Link href="/settings/patterns" className="underline">Learned patterns</Link> — rules yang AI pelajari dari training mode.</li>
+            <li><Link href="/settings/rate-card" className="underline">Rate card</Link> — daily rates per role / level / location. Used for mandays in BOM, project plan, SOW.</li>
+            <li><Link href="/settings/service-catalog" className="underline">Service catalog</Link> — default mandays per service. Keeps estimates consistent across projects.</li>
+            <li><Link href="/admin/templates" className="underline">Templates</Link> (admin) — upload sample BOM / Proposal / Architecture / SOW. The agent mirrors the structure and voice.</li>
+            <li><Link href="/admin/users" className="underline">Users</Link> (admin) — promote the presales head to superadmin so they can manage templates and monitor cost.</li>
+            <li><Link href="/admin/usage" className="underline">Usage</Link> (admin) — monitor token usage and estimated AI cost per purpose / per user.</li>
+            <li><Link href="/settings/patterns" className="underline">Learned patterns</Link> — rules the agent picked up during training mode.</li>
           </ul>
         </CardContent>
       </Card>
@@ -154,25 +154,25 @@ export default function HelpPage() {
         <CardHeader><CardTitle className="text-base">Tips</CardTitle></CardHeader>
         <CardContent>
           <ul className="text-sm space-y-1.5 list-disc pl-5">
-            <li><strong>Compare mode:</strong> centang 2+ cloud di project create. BOM / Architecture / Proposal akan keluar side-by-side dengan rekomendasi cloud terakhir.</li>
-            <li><strong>Purchase model:</strong> dipakai ke semua cloud dalam project (PAYG / Reserved 1-3y / Savings Plan 1-3y). Untuk fair comparison di mode compare.</li>
-            <li><strong>Training mode:</strong> di project detail, toggle ke <em>training</em>. Setelah generate dan kasih feedback, AI ekstrak pattern → disimpan di learned patterns → otomatis kepake di project production berikutnya.</li>
-            <li><strong>Region default:</strong> Malaysia West (Azure) + ap-southeast-5 (AWS). Dropdown punya full SEA + APAC + US/EU.</li>
-            <li><strong>Customer Study harusnya pertama:</strong> deliverable downstream akan lebih kontekstual karena ada profil customer + IT landscape yang bisa direferensikan.</li>
-            <li><strong>Quick project bisa di-promote:</strong> tambah upload, generate deliverable lain, jadinya full project — nggak perlu mulai dari nol.</li>
+            <li><strong>Compare mode:</strong> tick 2+ clouds when creating a project. BOM / Architecture / Proposal are produced side-by-side and the proposal ends with a recommended cloud.</li>
+            <li><strong>Purchase model:</strong> applied to every cloud in a project (PAYG / Reserved 1y / Reserved 3y / Savings Plan 1y / Savings Plan 3y) so compare-mode totals are fair.</li>
+            <li><strong>Training mode:</strong> on the project detail page, switch to <em>training</em>. After generating and giving feedback, the agent extracts patterns into Learned patterns, which then auto-apply to production projects.</li>
+            <li><strong>Default region:</strong> Malaysia West (Azure) + ap-southeast-5 (AWS). The dropdown lists the full SEA + APAC + US/EU catalog.</li>
+            <li><strong>Run Customer Study first:</strong> downstream deliverables are more contextual when there&apos;s a fresh customer profile + IT landscape to reference.</li>
+            <li><strong>Quick projects can be promoted:</strong> add more uploads or generate more deliverables on the same project to turn it into a full engagement — no need to start over.</li>
           </ul>
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Kalau stuck</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">Troubleshooting</CardTitle></CardHeader>
         <CardContent>
           <ul className="text-sm space-y-1.5 list-disc pl-5">
-            <li><strong>"no workloads"</strong> saat generate BOM / Assessment / TCO: upload inventory dulu (RVTools .xlsx atau CSV dengan kolom CPU + RAM + disk + OS). Kalau parsing gagal, klik <em>extract workloads</em> di Inputs section — AI bakal coba ekstrak dari text.</li>
-            <li><strong>"Stream interrupted"</strong> di tengah generate: fungsi Vercel timeout 60s. Klik Generate lagi — partial output sudah disimpan in-memory, retry akan re-stream dari awal tapi cepat karena prompt cache hit.</li>
-            <li><strong>SOW butuh BOM dulu:</strong> server enforce ini. Generate BOM di project yang sama dulu (cloud yang sama), baru SOW akan compose.</li>
-            <li><strong>"Load failed" (iOS Safari):</strong> network blip pas streaming. Retry. Kalau berulang, generate dari Workflow pipeline (lebih tahan reconnection).</li>
-            <li><strong>Output kepanjangan / kepotong:</strong> kurangi scope (split per cloud, generate satu cloud dulu, atau pisah deliverable).</li>
+            <li><strong>&ldquo;no workloads&rdquo;</strong> when generating BOM / Assessment / TCO: upload an inventory first (RVTools .xlsx, or a CSV with CPU + RAM + disk + OS columns). If parsing misses anything, click <em>extract workloads</em> in the Inputs section — the agent will try to extract them from the document text.</li>
+            <li><strong>&ldquo;Stream interrupted&rdquo;</strong> mid-generation: the Vercel function timed out at 60s. Click Generate again — the prompt cache hits on retry so the rerun is fast.</li>
+            <li><strong>SOW needs a BOM first:</strong> server-enforced. Quick generate handles this for you (it pipelines BOM → SOW). If you&apos;re using the Full pipeline, generate the BOM for the same cloud first.</li>
+            <li><strong>&ldquo;Load failed&rdquo; (iOS Safari):</strong> a network blip during streaming. Retry. If it keeps happening, generate from the Workflow pipeline button — it&apos;s more tolerant of reconnects.</li>
+            <li><strong>Output truncated:</strong> reduce scope (one cloud at a time, or split deliverables instead of compare mode).</li>
           </ul>
         </CardContent>
       </Card>

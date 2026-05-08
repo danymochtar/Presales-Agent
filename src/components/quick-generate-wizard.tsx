@@ -226,7 +226,7 @@ export function QuickGenerateWizard() {
             {prereqs.hardUpstream.length > 0 && (
               <p className="text-xs text-amber-700 dark:text-amber-400 mt-1.5">
                 Pipeline: {stagesToRun.map((s) => DELIVERABLE_PREREQS[s].label).join(" → ")}.
-                Form di bawah minta prereqs gabungan untuk semua tahap.
+                The form below asks for the combined prerequisites of every stage.
               </p>
             )}
           </div>

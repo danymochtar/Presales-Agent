@@ -11,7 +11,7 @@ export default function QuickPage() {
           Pick one deliverable, supply just its prerequisites, and get the document. Use this when you don&apos;t need
           the full pipeline — for example when you have a BOM-only ask, or want a SOW from an existing proposal.
           For end-to-end engagements, use <a href="/projects/new" className="underline">+ New project</a> instead.{" "}
-          <a href="/help" className="underline">Cara pakainya</a>.
+          <a href="/help" className="underline">How it works</a>.
         </p>
       </div>
       <QuickGenerateWizard />

@@ -78,7 +78,7 @@ export default async function DashboardPage() {
             {tenant.country} · {tenant.currency}
             {tenant.fxMyrPerUsd ? ` · FX MYR/USD ${tenant.fxMyrPerUsd}` : ""}
             {" · "}
-            <Link href="/help" className="underline hover:text-foreground">Baru di sini? Buka petunjuk</Link>
+            <Link href="/help" className="underline hover:text-foreground">First time? Open the guide</Link>
           </p>
         </div>
       </div>
