@@ -1,0 +1,242 @@
+// Presales Agent — MVP single-tenant schema.
+// Tables prefixed `auth_` are Better Auth conventional tables.
+// Multi-tenant migration path: add `tenantId` columns to all business tables;
+// Better Auth user.tenantId already in place for that.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------- Better Auth tables ----------
+model User {
+  id            String    @id
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  // membership in tenant (single-tenant MVP: all users belong to default tenant)
+  tenantId      String?
+  tenant        Tenant?   @relation(fields: [tenantId], references: [id])
+  sessions      Session[]
+  accounts      Account[]
+
+  @@map("auth_user")
+}
+
+model Session {
+  id        String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("auth_session")
+}
+
+model Account {
+  id                    String    @id
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId             String
+  providerId            String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@map("auth_account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("auth_verification")
+}
+
+// ---------- Tenant config (the 7 static-data categories) ----------
+model Tenant {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  country   String   @default("Malaysia")
+  locale    String   @default("en-MY")
+  currency  String   @default("USD")
+  fxMyrPerUsd Float? @default(4.70)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Catch-all JSON sections — keep schema flexible during MVP
+  identity     Json?  // legal entity, address, signatories, brand
+  commercial   Json?  // tax_rate_pct, payment_terms, partner_tier, margin, discount_matrix
+  standards    Json?  // primary_cloud, regions, iac, naming, tagging, security_baseline
+  team         Json?  // raci_default, escalation
+  compliance   Json?  // certifications, regulatory_frameworks
+  guardrails   Json?  // redaction, must_review, prohibited, auto_approve
+
+  users          User[]
+  rateCardItems  RateCardItem[]
+  catalogItems   ServiceCatalogItem[]
+  templates      Template[]
+  knowledge      KnowledgeSample[]
+  projects       Project[]
+  patterns       LearnedPattern[]
+}
+
+model RateCardItem {
+  id         String  @id @default(cuid())
+  tenantId   String
+  tenant     Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  role       String
+  level      String
+  dailyRate  Float
+  currency   String  @default("USD")
+  location   String  @default("MY")
+
+  @@index([tenantId])
+}
+
+model ServiceCatalogItem {
+  id                  String  @id @default(cuid())
+  tenantId            String
+  tenant              Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  service             String
+  defaultEffortDays   Float
+  prerequisite        String?
+  deliverable         String?
+  notes               String?
+
+  @@index([tenantId])
+}
+
+model Template {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  type         String   // letterhead_docx | proposal_template_docx | bom_template_xlsx | ...
+  blobUrl      String
+  originalName String
+  description  String?
+  registeredAt DateTime @default(now())
+
+  @@unique([tenantId, type])
+}
+
+model KnowledgeSample {
+  id              String   @id @default(cuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deliverableType String   // bom | proposal | architecture | assessment | project_plan
+  title           String
+  content         String?  // markdown extract
+  blobUrl         String?  // optional original file
+  outcome         String?  // won | lost | pending
+  industry        String?
+  useAsReference  Boolean  @default(true)
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  @@index([tenantId, deliverableType])
+}
+
+// ---------- Projects ----------
+model Project {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name          String
+  customer      String
+  industry      String?
+  stage         String   @default("draft") // draft | won | lost | pending | graduated
+  mode          String   @default("production") // production | training
+  scopeSummary  String?
+  primaryRegion String   @default("Malaysia Central")
+  drRegion      String   @default("Southeast Asia")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  inputs       ProjectInput[]
+  deliverables Deliverable[]
+  feedback     TrainingFeedback[]
+
+  @@index([tenantId])
+}
+
+model ProjectInput {
+  id              String   @id @default(cuid())
+  projectId       String
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  kind            String   // rvtools | azure_migrate | generic_csv | requirement_doc
+  blobUrl         String?
+  workloadsJson   Json?    // parsed normalized schema
+  rawSummary      String?  // human-readable summary, e.g. "23 VMs, 144 vCPU, 384 GB RAM"
+  createdAt       DateTime @default(now())
+
+  @@index([projectId])
+}
+
+model Deliverable {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type        String   // bom | proposal | architecture | assessment | project_plan
+  version     Int      @default(1)
+  status      String   @default("draft") // draft | reviewed | final
+  contentMd   String   @db.Text
+  metadata    Json?    // pricing snapshot, fx used, region, etc.
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([projectId, type, version])
+  @@index([projectId, type])
+}
+
+model TrainingFeedback {
+  id                String   @id @default(cuid())
+  projectId         String
+  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  deliverableType   String
+  feedback          String   @db.Text
+  extractedPatterns Json?
+  createdAt         DateTime @default(now())
+
+  @@index([projectId])
+}
+
+model LearnedPattern {
+  id              String   @id @default(cuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deliverableType String
+  pattern         String   @db.Text
+  scope           String   @default("conditional") // universal | conditional
+  conditions      Json?
+  confidence      String   @default("medium")
+  rationale       String?  @db.Text
+  sourceProjectId String?
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  @@index([tenantId, deliverableType])
+}
