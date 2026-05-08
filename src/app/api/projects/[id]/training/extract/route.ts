@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
-import { generateText } from "ai";
+import { generateObject } from "ai";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -16,17 +16,31 @@ const Body = z.object({
   draftContent: z.string().optional(),
 });
 
+// Loose enums coerced from common variants.
+const Scope = z.preprocess((v) => {
+  if (typeof v !== "string") return "conditional";
+  const lower = v.toLowerCase().trim();
+  return lower === "universal" || lower === "conditional" ? lower : "conditional";
+}, z.enum(["universal", "conditional"]));
+
+const Conf = z.preprocess((v) => {
+  if (typeof v !== "string") return "low";
+  const lower = v.toLowerCase().trim();
+  return lower === "high" || lower === "medium" || lower === "low" ? lower : "low";
+}, z.enum(["high", "medium", "low"]));
+
 const Candidate = z.object({
-  pattern: z.string().min(5),
-  scope: z.enum(["universal", "conditional"]),
-  conditions: z.array(z.string()),
-  confidence: z.enum(["high", "medium", "low"]),
-  rationale: z.string(),
-  example_from_draft: z.string().optional().default(""),
+  pattern: z.string().min(3),
+  scope: Scope,
+  conditions: z.array(z.string()).nullable().optional().transform((v) => v ?? []),
+  confidence: Conf,
+  rationale: z.string().nullable().optional().transform((v) => v ?? ""),
+  example_from_draft: z.string().nullable().optional().transform((v) => v ?? ""),
 });
+
 const ExtractResult = z.object({
-  candidates: z.array(Candidate),
-  skipped_feedback: z.array(z.string()).default([]),
+  candidates: z.array(Candidate).default([]),
+  skipped_feedback: z.array(z.string()).nullable().optional().transform((v) => v ?? []),
 });
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -48,38 +62,27 @@ ${parsed.data.deliverableType}
 # User feedback (verbatim)
 ${parsed.data.feedback}
 
-${parsed.data.draftContent ? `# Draft being reviewed (for context)\n\`\`\`markdown\n${parsed.data.draftContent.slice(0, 6000)}\n\`\`\`` : ""}
+${parsed.data.draftContent ? `# Draft being reviewed (for context)\n\`\`\`markdown\n${parsed.data.draftContent.slice(0, 6000)}\n\`\`\`` : ""}`;
 
-Extract candidate patterns. Return JSON only.`;
-
-  const result = await generateText({
-    model: gateway(DEFAULT_MODEL),
-    messages: [
-      {
-        role: "system",
-        content: PATTERN_EXTRACTOR_SYSTEM,
-        providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } },
-      },
-      { role: "user", content: userMessage },
-    ],
-    maxOutputTokens: 2000,
-  });
-
-  // Strip code fences if model added them despite instructions
-  let raw = result.text.trim();
-  if (raw.startsWith("```")) {
-    raw = raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
-  }
-
-  let extracted: z.infer<typeof ExtractResult>;
   try {
-    extracted = ExtractResult.parse(JSON.parse(raw));
-  } catch (e) {
+    const result = await generateObject({
+      model: gateway(DEFAULT_MODEL),
+      schema: ExtractResult,
+      messages: [
+        {
+          role: "system",
+          content: PATTERN_EXTRACTOR_SYSTEM,
+          providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } },
+        },
+        { role: "user", content: userMessage },
+      ],
+      maxOutputTokens: 2000,
+    });
+    return NextResponse.json(result.object);
+  } catch (err) {
     return NextResponse.json(
-      { error: "model returned malformed JSON", raw, detail: e instanceof Error ? e.message : String(e) },
+      { error: "extraction failed", detail: err instanceof Error ? err.message : String(err) },
       { status: 502 },
     );
   }
-
-  return NextResponse.json(extracted);
 }
