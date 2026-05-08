@@ -8,7 +8,7 @@ Vercel-deployable Next.js 15 app. Single-tenant for MVP. Generates Azure BOMs fr
 - Prisma + Postgres (Neon recommended)
 - Better Auth (email + password, single-tenant)
 - Tailwind + shadcn/ui primitives
-- Anthropic TS SDK with prompt caching + streaming
+- Vercel AI SDK (`ai`) + Vercel AI Gateway (`@ai-sdk/gateway`) for LLM routing — Anthropic models with prompt caching + streaming
 - `xlsx` for RVTools parsing
 
 ## What works in MVP (Phase 1)
@@ -36,7 +36,8 @@ Vercel-deployable Next.js 15 app. Single-tenant for MVP. Generates Azure BOMs fr
 ```bash
 cd web
 cp .env.example .env
-# Fill DATABASE_URL (Neon), BETTER_AUTH_SECRET (openssl rand -base64 32), ANTHROPIC_API_KEY
+# Fill: DATABASE_URL, BETTER_AUTH_SECRET (openssl rand -base64 32),
+#       AI_GATEWAY_API_KEY, BETTER_AUTH_URL=http://localhost:3000
 
 pnpm install      # or npm install
 pnpm db:push      # creates tables
@@ -47,20 +48,21 @@ Sign up → land on dashboard → create project → upload RVTools → click "G
 
 ## Deploy to Vercel
 
-1. Push the repo to GitHub (this branch is `claude/presales-agent-pilot-qDBpJ`).
-2. In Vercel, import the project. **Set root directory to `web/`**.
-3. Provision Neon Postgres via Vercel marketplace (free tier). Vercel auto-injects `DATABASE_URL` and `DIRECT_URL`.
-4. Add env vars in Vercel dashboard:
+1. Push to GitHub (branch: `claude/presales-agent-pilot-qDBpJ`).
+2. Vercel → Import Project → **Root directory: `web/`**.
+3. Database: provision Postgres (Vercel Postgres / Neon / external host). DATABASE_URL is the only DB var needed.
+4. Env vars to set in Vercel dashboard:
+   - `DATABASE_URL` — full Postgres connection string
    - `BETTER_AUTH_SECRET` — `openssl rand -base64 32`
-   - `BETTER_AUTH_URL` — your Vercel domain (e.g. `https://presales-agent.vercel.app`)
-   - `ANTHROPIC_API_KEY` — your key
-   - `ANTHROPIC_MODEL` — e.g. `claude-sonnet-4-6` (default)
-5. After first deploy, run `prisma db push` once against the production DB:
+   - `AI_GATEWAY_API_KEY` — Vercel AI Gateway key (Vercel → AI → API Keys)
+   - `BETTER_AUTH_URL` — **leave unset on Vercel**; auto-detected from `VERCEL_PROJECT_PRODUCTION_URL` / `VERCEL_URL`
+   - `AI_MODEL` — optional, defaults to `anthropic/claude-sonnet-4.5`
+5. After first deploy, push schema once from local:
    ```bash
-   DATABASE_URL="<prod-url>" DIRECT_URL="<prod-url>" pnpm prisma db push
+   cd web
+   DATABASE_URL="<prod-url>" pnpm prisma db push
    ```
-   Or set `prisma migrate deploy` as a build step if you switch to migrations.
-6. Visit your domain → sign up → start using.
+6. Visit your domain → sign up → use.
 
 ## Vercel free tier constraints (verified)
 

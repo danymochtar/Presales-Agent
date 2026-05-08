@@ -1,8 +1,9 @@
 import { NextRequest } from "next/server";
 import { headers } from "next/headers";
+import { streamText } from "ai";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { anthropic, DEFAULT_MODEL } from "@/lib/anthropic";
+import { gateway, DEFAULT_MODEL } from "@/lib/ai";
 import { GENERATE_BOM_SYSTEM } from "@/lib/prompts/generate-bom";
 import { batchVmPrices } from "@/lib/pricing/azure";
 import { fxRateOrFallback, usdTo } from "@/lib/pricing/fx";
@@ -18,7 +19,7 @@ const REGION_TO_ARM: Record<string, string> = {
   "East Asia": "eastasia",
 };
 
-export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return new Response("unauthorized", { status: 401 });
 
@@ -39,13 +40,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     return new Response("no workloads — upload an inventory first", { status: 400 });
   }
 
-  // 1. Ensure every workload has an ARM SKU recommendation
   const workloads: Workload[] = workloadSet.workloads.map((w) => ({
     ...w,
     recommendedSku: w.recommendedSku ?? recommendSku(w.cpu, w.ramGb),
   }));
 
-  // 2. Fetch live prices server-side (deterministic, fast, parallel)
   const armRegion = REGION_TO_ARM[project.primaryRegion] ?? "malaysiacentral";
   const linuxSkus = [...new Set(workloads.filter((w) => w.os === "linux" || w.os === "other").map((w) => w.recommendedSku!))];
   const windowsSkus = [...new Set(workloads.filter((w) => w.os === "windows").map((w) => w.recommendedSku!))];
@@ -55,7 +54,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     windowsSkus.length ? batchVmPrices(windowsSkus, armRegion, "windows", "consumption") : Promise.resolve({}),
   ]);
 
-  // 3. Build the user message: workloads + prices + tenant context + patterns
   const fxRate = fxRateOrFallback("MYR", project.tenant.fxMyrPerUsd);
   const tenantContext = {
     tenant: {
@@ -113,17 +111,20 @@ ${JSON.stringify({ linux: linuxPrices, windows: windowsPrices }, null, 2)}
 Generate the BOM now in Markdown following the standard structure. Apply learned patterns where applicable.
 `;
 
-  const stream = await anthropic.messages.stream({
-    model: DEFAULT_MODEL,
-    max_tokens: 8000,
-    system: [
+  const result = streamText({
+    model: gateway(DEFAULT_MODEL),
+    messages: [
       {
-        type: "text",
-        text: GENERATE_BOM_SYSTEM,
-        cache_control: { type: "ephemeral" },
+        role: "system",
+        content: GENERATE_BOM_SYSTEM,
+        providerOptions: {
+          // Anthropic prompt caching for the long system prompt.
+          anthropic: { cacheControl: { type: "ephemeral" } },
+        },
       },
+      { role: "user", content: userMessage },
     ],
-    messages: [{ role: "user", content: userMessage }],
+    maxOutputTokens: 8000,
   });
 
   let fullText = "";
@@ -131,14 +132,11 @@ Generate the BOM now in Markdown following the standard structure. Apply learned
   const sse = new ReadableStream({
     async start(controller) {
       try {
-        for await (const event of stream) {
-          if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-            fullText += event.delta.text;
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ delta: event.delta.text })}\n\n`));
-          }
+        for await (const chunk of result.textStream) {
+          fullText += chunk;
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ delta: chunk })}\n\n`));
         }
 
-        // Persist final version
         const last = await prisma.deliverable.findFirst({
           where: { projectId: project.id, type: "bom" },
           orderBy: { version: "desc" },
@@ -157,6 +155,7 @@ Generate the BOM now in Markdown following the standard structure. Apply learned
               priceSnapshot: { linux: linuxPrices, windows: windowsPrices },
               workloadCount: workloadSet.totals.count,
               generatedAt: new Date().toISOString(),
+              model: DEFAULT_MODEL,
             },
           },
         });
