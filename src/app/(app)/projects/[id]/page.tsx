@@ -3,20 +3,63 @@ import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { UploadInputForm } from "@/components/upload-input-form";
 import { ProjectModeToggle } from "@/components/project-mode-toggle";
 import { ExtractWorkloadsButton } from "@/components/extract-workloads-button";
 import { SmartWorkflow } from "@/components/smart-workflow";
+import { CloudChip } from "@/components/cloud-chip";
 
-const CLOUD_LABEL: Record<string, string> = {
-  azure: "Azure",
-  aws: "AWS",
-  gcp: "GCP",
-  compare: "Compare",
-  multi: "Multi",
+const PROJECT_TYPE_LABELS: Record<string, string> = {
+  migration: "Migration",
+  greenfield: "Greenfield",
+  modernization: "Modernization",
+  dr: "DR / Resilience",
+  poc: "POC / Pilot",
+  optimization: "Optimization",
+  unknown: "—",
 };
+
+type Deliverable = {
+  id: string;
+  type: string;
+  cloudProvider: string | null;
+  version: number;
+  status: string;
+  createdAt: Date;
+};
+
+const DELIVERABLE_DEFS: Array<{
+  type: string;
+  title: string;
+  desc: string;
+  basePath: (id: string) => string;
+  showCloud: boolean;
+  group: "discover" | "design" | "commercial" | "delivery";
+  groupLabel: string;
+}> = [
+  { type: "customer_study", title: "Customer study",  desc: "Pre-engagement briefing — customer profile + IT landscape",  basePath: (id) => `/projects/${id}/customer-study`, showCloud: false, group: "discover", groupLabel: "Discover" },
+  { type: "assessment",     title: "Assessment",      desc: "Full-stack readiness — infra / platform / app / DB",         basePath: (id) => `/projects/${id}/assessment`,     showCloud: true,  group: "discover", groupLabel: "Discover" },
+  { type: "architecture",   title: "Architecture",    desc: "Target landing zone + Mermaid diagrams",                     basePath: (id) => `/projects/${id}/architecture`,   showCloud: true,  group: "design",   groupLabel: "Design" },
+  { type: "bom",            title: "BOM",             desc: "Year-1 cost — live cloud prices + services",                 basePath: (id) => `/projects/${id}/bom`,            showCloud: true,  group: "commercial", groupLabel: "Commercial" },
+  { type: "tco",            title: "TCO",             desc: "3-5 year scenarios + sensitivity analysis",                  basePath: (id) => `/projects/${id}/tco`,            showCloud: true,  group: "commercial", groupLabel: "Commercial" },
+  { type: "project_plan",   title: "Project plan",    desc: "Phased rollout + Mermaid Gantt + RACI",                      basePath: (id) => `/projects/${id}/project-plan`,   showCloud: true,  group: "delivery", groupLabel: "Delivery" },
+  { type: "proposal",       title: "Proposal",        desc: "Customer-facing pitch composing the above",                  basePath: (id) => `/projects/${id}/proposal`,       showCloud: true,  group: "commercial", groupLabel: "Commercial" },
+  { type: "sow",            title: "SOW",             desc: "Legal-grade scope (post-decision)",                          basePath: (id) => `/projects/${id}/sow`,            showCloud: true,  group: "delivery", groupLabel: "Delivery" },
+  { type: "ms_offering",    title: "Managed services", desc: "Run/operate offering for post-handover",                    basePath: (id) => `/projects/${id}/ms-offering`,    showCloud: true,  group: "delivery", groupLabel: "Delivery" },
+];
+
+function relTime(date: Date): string {
+  const diff = Date.now() - new Date(date).getTime();
+  const m = Math.floor(diff / 60_000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d}d ago`;
+  return new Date(date).toLocaleDateString();
+}
 
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -34,23 +77,14 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   const targetClouds = (project.targetClouds as string[]) ?? ["azure"];
   const cloudRegions = (project.cloudRegions as Record<string, { primary: string; dr: string }> | null) ?? {};
 
-  const byType = (t: string) => project.deliverables.filter((d) => d.type === t);
-  const boms = byType("bom");
-  const proposals = byType("proposal");
-  const architectures = byType("architecture");
-  const assessments = byType("assessment");
-  const tcos = byType("tco");
-  const projectPlans = byType("project_plan");
-  const sows = byType("sow");
-  const msOfferings = byType("ms_offering");
-  const customerStudies = byType("customer_study");
+  const byType = (t: string) => project.deliverables.filter((d) => d.type === t) as Deliverable[];
+  const groupedDeliverables = DELIVERABLE_DEFS.map((def) => ({ def, items: byType(def.type) }));
+
   const latestInput = project.inputs[0];
-  const hasBom = boms.length > 0;
   const hasInput = !!latestInput;
   const hasInventory = project.inputs.some((i) => i.workloadsJson);
 
-  // Build map: cloud -> list of stage IDs with at least one version. Stage IDs
-  // here use the kebab-case form ("project-plan") matching SmartWorkflow.
+  // existingByStage map for SmartWorkflow
   const STAGE_FROM_TYPE: Record<string, string> = {
     customer_study: "customer-study",
     assessment: "assessment",
@@ -63,7 +97,6 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     ms_offering: "ms-offering",
   };
   const existingByStage: Record<string, string[]> = {};
-  // Cloud-agnostic stages — apply to every cloud's existing-set
   const CLOUD_AGNOSTIC_STAGES = new Set(["customer-study"]);
   function ensureCloud(c: string) {
     if (!existingByStage[c]) existingByStage[c] = [];
@@ -72,7 +105,6 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     const stage = STAGE_FROM_TYPE[d.type];
     if (!stage) continue;
     if (CLOUD_AGNOSTIC_STAGES.has(stage)) {
-      // applies to any cloud — add to all known target clouds + compare
       for (const c of [...targetClouds, "compare"]) {
         ensureCloud(c);
         if (!existingByStage[c].includes(stage)) existingByStage[c].push(stage);
@@ -86,45 +118,49 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">{project.name}</h1>
-          <p className="text-sm text-muted-foreground">
-            {project.customer} · {project.industry ?? "—"}{project.customerSegment ? ` · ${project.customerSegment}` : ""} · stage: {project.stage}
+      {/* Header — project info only, no deliverable buttons (cards do navigation) */}
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 md:gap-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-xl md:text-2xl font-semibold truncate">{project.name}</h1>
+            <span className="text-[10px] uppercase tracking-wider rounded px-1.5 py-0.5 bg-muted text-muted-foreground">
+              {project.stage}
+            </span>
+            {project.projectType && project.projectType !== "unknown" && (
+              <span className="text-xs rounded-full px-2 py-0.5 bg-primary/10 text-primary">
+                {PROJECT_TYPE_LABELS[project.projectType]}
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-muted-foreground mt-1">
+            {project.customer}
+            {project.industry && <> · {project.industry}</>}
+            {project.customerSegment && <> · {project.customerSegment}</>}
           </p>
+          {project.scopeSummary && (
+            <p className="text-sm text-foreground/80 mt-2 max-w-3xl">{project.scopeSummary}</p>
+          )}
           <div className="flex gap-1.5 mt-2 flex-wrap">
             {targetClouds.map((c) => (
-              <span
-                key={c}
-                className={`text-xs rounded px-2 py-0.5 border ${
-                  project.primaryCloud === c ? "bg-primary text-primary-foreground border-primary" : "bg-accent text-foreground"
-                }`}
-                title={cloudRegions[c] ? `${cloudRegions[c].primary} → ${cloudRegions[c].dr}` : ""}
-              >
-                {CLOUD_LABEL[c] ?? c}
-                {cloudRegions[c] && <span className="opacity-70 ml-1">{cloudRegions[c].primary}</span>}
-                {project.primaryCloud === c && " ★"}
+              <span key={c} className="inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-xs chip-azure" style={c === "aws" ? undefined : undefined}>
+                <CloudChip cloud={c} size="xs" />
+                {cloudRegions[c] && (
+                  <span className="text-muted-foreground text-[11px]">{cloudRegions[c].primary}</span>
+                )}
+                {project.primaryCloud === c && <span title="Primary cloud">★</span>}
               </span>
             ))}
           </div>
         </div>
-        <div className="flex flex-wrap gap-2 items-center justify-end">
+        <div className="shrink-0">
           <ProjectModeToggle projectId={project.id} initialMode={project.mode as "production" | "training"} />
-          <Button asChild variant="outline" size="sm"><Link href={`/projects/${project.id}/customer-study`}>Customer study</Link></Button>
-          <Button asChild variant="outline" size="sm"><Link href={`/projects/${project.id}/assessment`}>Assessment</Link></Button>
-          <Button asChild variant="outline" size="sm"><Link href={`/projects/${project.id}/architecture`}>Architecture</Link></Button>
-          <Button asChild variant="outline" size="sm"><Link href={`/projects/${project.id}/bom`}>BOM</Link></Button>
-          <Button asChild variant={hasBom ? "outline" : "ghost"} size="sm"><Link href={`/projects/${project.id}/tco`}>TCO</Link></Button>
-          <Button asChild variant="outline" size="sm"><Link href={`/projects/${project.id}/project-plan`}>Project plan</Link></Button>
-          <Button asChild variant={hasBom ? "outline" : "ghost"} size="sm"><Link href={`/projects/${project.id}/proposal`}>Proposal</Link></Button>
-          <Button asChild variant={hasBom ? "outline" : "ghost"} size="sm"><Link href={`/projects/${project.id}/sow`}>SOW</Link></Button>
-          <Button asChild variant={hasBom ? "outline" : "ghost"} size="sm"><Link href={`/projects/${project.id}/ms-offering`}>Managed services</Link></Button>
         </div>
       </div>
 
+      {/* Inputs */}
       <Card>
-        <CardHeader><CardTitle>Inputs</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
+        <CardHeader className="pb-3"><CardTitle className="text-base">Inputs</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
           <UploadInputForm projectId={project.id} />
           {project.inputs.length > 0 && (
             <ul className="divide-y text-sm">
@@ -133,16 +169,18 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                 const hasText = !!i.textContent;
                 const canTryExtract = !hasWorkloads && hasText;
                 return (
-                  <li key={i.id} className="py-2 flex flex-wrap items-start justify-between gap-2">
+                  <li key={i.id} className="py-2.5 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs bg-accent rounded px-1.5 py-0.5">{i.kind}</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[10px] uppercase tracking-wider rounded px-1.5 py-0.5 bg-accent">{i.kind}</span>
                         {i.filename && <span className="font-medium truncate">{i.filename}</span>}
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">{i.rawSummary}</p>
                     </div>
                     {canTryExtract && (
-                      <ExtractWorkloadsButton projectId={project.id} inputId={i.id} />
+                      <div className="shrink-0">
+                        <ExtractWorkloadsButton projectId={project.id} inputId={i.id} />
+                      </div>
                     )}
                   </li>
                 );
@@ -152,13 +190,13 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         </CardContent>
       </Card>
 
+      {/* Smart workflow */}
       <Card>
-        <CardHeader>
-          <CardTitle>Smart workflow</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            The agent classifies the engagement type from your uploads and recommends the deliverable
-            sequence. One click runs them in dependency order. Customize the selection if the
-            recommendation isn't right.
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Smart workflow</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            The agent classifies the engagement type from your inputs and recommends a deliverable
+            sequence. One click runs them in dependency order.
           </p>
         </CardHeader>
         <CardContent>
@@ -175,86 +213,45 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <DeliverableCard
-          title="Customer study"
-          items={customerStudies}
-          basePath={`/projects/${project.id}/customer-study`}
-          emptyMsg="Pre-engagement briefing — customer profile + IT landscape"
-        />
-        <DeliverableCard
-          title="Assessment"
-          items={assessments}
-          basePath={`/projects/${project.id}/assessment`}
-          showCloud
-          emptyMsg={hasInput ? "Score full-stack readiness (infra/platform/app/DB)" : "Upload inventory first"}
-        />
-        <DeliverableCard
-          title="Architecture"
-          items={architectures}
-          basePath={`/projects/${project.id}/architecture`}
-          showCloud
-          emptyMsg="Target-state architecture"
-        />
-        <DeliverableCard
-          title="BOM"
-          items={boms}
-          basePath={`/projects/${project.id}/bom`}
-          showCloud
-          emptyMsg={hasInput ? "Generate BOM" : "Upload inventory first"}
-        />
-        <DeliverableCard
-          title="TCO"
-          items={tcos}
-          basePath={`/projects/${project.id}/tco`}
-          showCloud
-          emptyMsg={hasBom ? "3-5 year scenarios from BOM" : "BOM first"}
-        />
-        <DeliverableCard
-          title="Project plan"
-          items={projectPlans}
-          basePath={`/projects/${project.id}/project-plan`}
-          showCloud
-          emptyMsg="Phased rollout + Gantt"
-        />
-        <DeliverableCard
-          title="Proposal"
-          items={proposals}
-          basePath={`/projects/${project.id}/proposal`}
-          showCloud
-          emptyMsg={hasBom ? "Compose proposal from BOM" : "BOM first"}
-        />
-        <DeliverableCard
-          title="SOW"
-          items={sows}
-          basePath={`/projects/${project.id}/sow`}
-          showCloud
-          emptyMsg={hasBom ? "Legal-grade scope (post-decision)" : "BOM first"}
-        />
-        <DeliverableCard
-          title="Managed services"
-          items={msOfferings}
-          basePath={`/projects/${project.id}/ms-offering`}
-          showCloud
-          emptyMsg={hasBom ? "Run/operate offering for post-handover" : "BOM first"}
-        />
-      </div>
+      {/* Deliverable cards grouped by lifecycle phase */}
+      {(["discover", "design", "commercial", "delivery"] as const).map((group) => {
+        const groupDefs = groupedDeliverables.filter(({ def }) => def.group === group);
+        if (groupDefs.length === 0) return null;
+        const groupLabel = groupDefs[0].def.groupLabel;
+        return (
+          <section key={group} className="space-y-2">
+            <h2 className="text-xs uppercase tracking-wider text-muted-foreground font-semibold px-1">{groupLabel}</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {groupDefs.map(({ def, items }) => (
+                <DeliverableCard
+                  key={def.type}
+                  title={def.title}
+                  description={def.desc}
+                  items={items}
+                  basePath={def.basePath(project.id)}
+                  showCloud={def.showCloud}
+                />
+              ))}
+            </div>
+          </section>
+        );
+      })}
 
+      {/* Recent training feedback */}
       {project.feedback.length > 0 && (
         <Card>
-          <CardHeader><CardTitle>Recent training feedback</CardTitle></CardHeader>
+          <CardHeader className="pb-3"><CardTitle className="text-base">Recent training feedback</CardTitle></CardHeader>
           <CardContent>
             <ul className="space-y-2 text-sm">
               {project.feedback.map((f) => {
                 const patterns = Array.isArray(f.extractedPatterns) ? f.extractedPatterns : [];
                 return (
-                  <li key={f.id} className="border-l-2 border-primary pl-3">
+                  <li key={f.id} className="border-l-2 border-primary/40 pl-3">
                     <p>
-                      <span className="font-medium capitalize">{f.deliverableType}</span> ·{" "}
-                      <span className="text-muted-foreground text-xs">{new Date(f.createdAt).toLocaleString()}</span> ·{" "}
-                      <span className="text-muted-foreground text-xs">{patterns.length} pattern(s) saved</span>
+                      <span className="font-medium capitalize">{f.deliverableType}</span>{" "}
+                      <span className="text-muted-foreground text-xs">· {relTime(f.createdAt)} · {patterns.length} pattern(s)</span>
                     </p>
-                    <p className="text-muted-foreground italic">"{f.feedback.slice(0, 160)}{f.feedback.length > 160 ? "…" : ""}"</p>
+                    <p className="text-muted-foreground italic line-clamp-2">"{f.feedback.slice(0, 200)}"</p>
                   </li>
                 );
               })}
@@ -268,48 +265,61 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
 
 function DeliverableCard({
   title,
+  description,
   items,
   basePath,
-  emptyMsg,
   showCloud,
 }: {
   title: string;
-  items: { id: string; version: number; status: string; cloudProvider: string | null; createdAt: Date }[];
+  description: string;
+  items: Deliverable[];
   basePath: string;
-  emptyMsg: string;
-  showCloud?: boolean;
+  showCloud: boolean;
 }) {
+  const isEmpty = items.length === 0;
+  // Per-cloud version count
+  const byCloud = new Map<string, number>();
+  for (const d of items) {
+    const c = d.cloudProvider ?? "azure";
+    byCloud.set(c, (byCloud.get(c) ?? 0) + 1);
+  }
+  const latest = items[0];
+
   return (
-    <Card>
-      <CardHeader><CardTitle className="text-base">{title} ({items.length})</CardTitle></CardHeader>
-      <CardContent>
-        {items.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{emptyMsg}</p>
-        ) : (
-          <ul className="divide-y text-sm">
-            {items.slice(0, 5).map((d) => {
-              const cloud = d.cloudProvider ?? "default";
-              const cloudParam = showCloud && cloud !== "default" && cloud !== "multi" ? `?v=${d.version}&cloud=${cloud}` : `?v=${d.version}`;
-              return (
-                <li key={d.id} className="py-2 flex justify-between items-center gap-2">
-                  <Link href={`${basePath}${cloudParam}`} className="hover:underline truncate">
-                    {showCloud && cloud !== "default" && (
-                      <span className="text-xs bg-accent rounded px-1.5 py-0.5 mr-1.5">{CLOUD_LABEL[cloud] ?? cloud}</span>
-                    )}
-                    v{d.version} <span className="text-muted-foreground text-xs">· {d.status}</span>
-                  </Link>
-                  <span className="text-xs text-muted-foreground shrink-0">{new Date(d.createdAt).toLocaleDateString()}</span>
-                </li>
-              );
-            })}
-            {items.length > 5 && (
-              <li className="py-2 text-xs text-muted-foreground">
-                <Link href={basePath} className="underline">+{items.length - 5} more</Link>
-              </li>
-            )}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
+    <Link
+      href={basePath}
+      className="group block rounded-lg border bg-card hover:border-primary/40 hover:shadow-sm transition p-4 space-y-2 min-h-[140px]"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="font-semibold truncate">{title}</p>
+          <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{description}</p>
+        </div>
+        <span className={`shrink-0 inline-flex items-center justify-center rounded-full text-[10px] font-bold w-6 h-6 ${
+          isEmpty
+            ? "bg-muted text-muted-foreground"
+            : "bg-primary text-primary-foreground"
+        }`}>
+          {items.length}
+        </span>
+      </div>
+      <div className="flex items-center justify-between gap-2 pt-1">
+        <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+          {showCloud && byCloud.size > 0 ? (
+            [...byCloud.entries()].map(([cloud, count]) => (
+              <span key={cloud} className="inline-flex items-center gap-1">
+                <CloudChip cloud={cloud} size="xs" />
+                <span className="text-[10px] text-muted-foreground">×{count}</span>
+              </span>
+            ))
+          ) : isEmpty ? (
+            <span className="text-xs text-muted-foreground italic">not generated yet</span>
+          ) : null}
+        </div>
+        <span className="text-[11px] text-muted-foreground group-hover:text-primary shrink-0 whitespace-nowrap">
+          {latest ? `Latest ${relTime(latest.createdAt)}` : ""} →
+        </span>
+      </div>
+    </Link>
   );
 }

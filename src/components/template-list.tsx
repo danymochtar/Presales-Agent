@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { CloudChip } from "@/components/cloud-chip";
 
 type Template = {
   id: string;
@@ -83,26 +84,24 @@ export function TemplateList({ initial }: { initial: Template[] }) {
           <h3 className="text-sm font-semibold">{TYPE_LABELS[type] ?? type} ({group.length})</h3>
           <ul className="divide-y border rounded-md">
             {group.map((t) => {
-              const filters: string[] = [];
-              if (t.cloudProvider) filters.push(t.cloudProvider.toUpperCase());
-              if (t.projectType) filters.push(t.projectType);
               return (
-                <li key={t.id} className={`p-3 flex items-start justify-between gap-2 ${t.status === "archived" ? "opacity-50" : ""}`}>
+                <li key={t.id} className={`p-3 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 ${t.status === "archived" ? "opacity-50" : ""}`}>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium">{t.name ?? t.originalName ?? "Untitled template"}</span>
-                      {filters.map((f) => (
-                        <span key={f} className="text-[10px] uppercase rounded px-1.5 py-0.5 bg-accent">{f}</span>
-                      ))}
+                      <span className="font-medium break-words">{t.name ?? t.originalName ?? "Untitled template"}</span>
+                      {t.cloudProvider && <CloudChip cloud={t.cloudProvider} size="xs" />}
+                      {t.projectType && (
+                        <span className="text-[10px] uppercase rounded px-1.5 py-0.5 bg-accent">{t.projectType}</span>
+                      )}
                       {t.status === "archived" && <span className="text-[10px] uppercase text-muted-foreground">archived</span>}
                     </div>
-                    {t.description && <p className="text-xs text-muted-foreground mt-0.5">{t.description}</p>}
-                    {t.originalName && <p className="text-xs text-muted-foreground">{t.originalName}</p>}
+                    {t.description && <p className="text-xs text-muted-foreground mt-0.5 break-words">{t.description}</p>}
+                    {t.originalName && <p className="text-xs text-muted-foreground truncate">{t.originalName}</p>}
                     <p className="text-xs text-muted-foreground">
                       {(t.textContent?.length ?? 0).toLocaleString()} chars · added {new Date(t.createdAt).toLocaleDateString()}
                     </p>
                   </div>
-                  <div className="flex gap-1 shrink-0">
+                  <div className="flex gap-1 shrink-0 self-start">
                     <Button size="sm" variant="ghost" onClick={() => toggleStatus(t)} disabled={busy === t.id}>
                       {t.status === "active" ? "Archive" : "Activate"}
                     </Button>

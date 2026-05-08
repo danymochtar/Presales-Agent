@@ -4,47 +4,94 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Noventiq + AWS + GCP-inspired palette: deep navy primary, amber accent.
+       Neutral surfaces, professional enterprise feel. */
+    --background: 220 14% 98%;
+    --foreground: 222 47% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
+    --card-foreground: 222 47% 11%;
+    --primary: 222 47% 11%;          /* deep navy — primary text + buttons */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 220 14% 93%;           /* very light gray — hover surface */
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 222 47% 11%;
     --radius: 0.5rem;
+
+    /* Cloud brand colors — used by CloudChip + cloud-tabbed UI */
+    --cloud-azure-bg: 214 95% 93%;
+    --cloud-azure-fg: 214 80% 25%;
+    --cloud-azure-bd: 214 70% 80%;
+    --cloud-aws-bg: 30 100% 92%;
+    --cloud-aws-fg: 25 90% 32%;
+    --cloud-aws-bd: 30 80% 75%;
+    --cloud-gcp-bg: 142 70% 92%;
+    --cloud-gcp-fg: 142 70% 22%;
+    --cloud-gcp-bd: 142 60% 75%;
+    --cloud-multi-bg: 270 80% 94%;
+    --cloud-multi-fg: 270 60% 30%;
+    --cloud-multi-bd: 270 50% 80%;
+
+    /* Brand accent — Noventiq+AWS-style amber for CTAs / highlights */
+    --brand-accent: 38 92% 50%;
+    --brand-accent-fg: 0 0% 100%;
   }
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+    --background: 222 47% 6%;
+    --foreground: 220 14% 96%;
+    --card: 222 47% 9%;
+    --card-foreground: 220 14% 96%;
+    --primary: 220 14% 96%;
+    --primary-foreground: 222 47% 11%;
+    --secondary: 222 30% 15%;
+    --secondary-foreground: 220 14% 96%;
+    --muted: 222 30% 15%;
+    --muted-foreground: 220 9% 60%;
+    --accent: 222 30% 15%;
+    --accent-foreground: 220 14% 96%;
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 220 14% 96%;
+    --border: 222 30% 18%;
+    --input: 222 30% 18%;
+    --ring: 220 14% 96%;
+
+    --cloud-azure-bg: 214 50% 18%;
+    --cloud-azure-fg: 214 95% 80%;
+    --cloud-azure-bd: 214 50% 30%;
+    --cloud-aws-bg: 25 60% 18%;
+    --cloud-aws-fg: 30 95% 80%;
+    --cloud-aws-bd: 25 60% 30%;
+    --cloud-gcp-bg: 142 40% 16%;
+    --cloud-gcp-fg: 142 70% 80%;
+    --cloud-gcp-bd: 142 40% 28%;
+    --cloud-multi-bg: 270 40% 18%;
+    --cloud-multi-fg: 270 80% 85%;
+    --cloud-multi-bd: 270 40% 30%;
   }
 }
 
 @layer base {
   * { @apply border-border; }
-  body { @apply bg-background text-foreground; }
+  body {
+    @apply bg-background text-foreground;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, h4 { letter-spacing: -0.01em; }
+}
+
+@layer utilities {
+  /* Cloud chip surfaces — used by <CloudChip />. */
+  .chip-azure { background: hsl(var(--cloud-azure-bg)); color: hsl(var(--cloud-azure-fg)); border-color: hsl(var(--cloud-azure-bd)); }
+  .chip-aws   { background: hsl(var(--cloud-aws-bg));   color: hsl(var(--cloud-aws-fg));   border-color: hsl(var(--cloud-aws-bd));   }
+  .chip-gcp   { background: hsl(var(--cloud-gcp-bg));   color: hsl(var(--cloud-gcp-fg));   border-color: hsl(var(--cloud-gcp-bd));   }
+  .chip-multi { background: hsl(var(--cloud-multi-bg)); color: hsl(var(--cloud-multi-fg)); border-color: hsl(var(--cloud-multi-bd)); }
 }

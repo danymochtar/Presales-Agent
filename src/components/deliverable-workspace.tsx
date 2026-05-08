@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrainingPanel } from "@/components/training-panel";
+import { CloudChip } from "@/components/cloud-chip";
 
 type Version = { id: string; version: number; status: string; createdAt: string };
 type CloudTab = { id: string; label: string };
@@ -106,35 +107,36 @@ export function DeliverableWorkspace({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">
-            {label} — {projectName}
-            {activeCloud && <span className="ml-2 text-base font-normal text-muted-foreground">· {activeCloud}</span>}
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl md:text-2xl font-semibold flex flex-wrap items-baseline gap-x-2">
+            <span className="truncate">{label}</span>
+            <span className="text-sm md:text-base font-normal text-muted-foreground truncate">{projectName}</span>
+            {activeCloud && <CloudChip cloud={activeCloud} />}
           </h1>
           <p className="text-sm text-muted-foreground">
             {versions.length === 0 ? "No versions yet" : `Latest v${versions[0].version} · ${versions.length} version(s)`}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 shrink-0">
           {selectedDeliverableId && (
-            <Button asChild variant="outline">
+            <Button asChild variant="outline" size="sm">
               <a href={`/api/deliverables/${selectedDeliverableId}/docx`}>Download .docx</a>
             </Button>
           )}
-          <Button onClick={generate} disabled={streaming || !canGenerate}>
+          <Button onClick={generate} disabled={streaming || !canGenerate} size="sm">
             {streaming ? "Generating..." : "Generate new version"}
           </Button>
         </div>
       </div>
 
       {cloudTabs && cloudTabs.length > 0 && basePath && (
-        <div className="flex gap-1 border-b">
+        <div className="flex gap-1 border-b overflow-x-auto -mx-1 px-1">
           {cloudTabs.map((c) => (
             <Link
               key={c.id}
               href={`${basePath}?cloud=${c.id}`}
-              className={`px-3 py-2 text-sm border-b-2 -mb-[1px] transition ${
+              className={`px-3 py-2 text-sm border-b-2 -mb-[1px] transition whitespace-nowrap ${
                 activeCloud === c.id ? "border-primary font-medium" : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -150,23 +152,23 @@ export function DeliverableWorkspace({
 
       {err && <p className="text-sm text-destructive">{err}</p>}
 
-      <div className="grid grid-cols-4 gap-4">
-        <Card className="col-span-1">
-          <CardHeader><CardTitle className="text-sm">Versions</CardTitle></CardHeader>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="md:col-span-1 order-2 md:order-1">
+          <CardHeader className="pb-2"><CardTitle className="text-sm">Versions</CardTitle></CardHeader>
           <CardContent>
             {versions.length === 0 ? (
               <p className="text-xs text-muted-foreground">none</p>
             ) : (
-              <ul className="space-y-1 text-sm">
+              <ul className="flex md:block gap-1 md:space-y-1 text-sm overflow-x-auto md:overflow-visible">
                 {versions.map((v) => {
                   const params = new URLSearchParams();
                   params.set("v", String(v.version));
                   if (activeCloud) params.set("cloud", activeCloud);
                   return (
-                    <li key={v.id}>
+                    <li key={v.id} className="shrink-0">
                       <a
                         href={`?${params.toString()}`}
-                        className={`block rounded px-2 py-1 hover:bg-accent ${v.version === selectedVersion ? "bg-accent" : ""}`}
+                        className={`block rounded px-2 py-1 hover:bg-accent whitespace-nowrap ${v.version === selectedVersion ? "bg-accent" : ""}`}
                       >
                         v{v.version} <span className="text-xs text-muted-foreground">· {v.status}</span>
                       </a>
@@ -178,11 +180,11 @@ export function DeliverableWorkspace({
           </CardContent>
         </Card>
 
-        <Card className="col-span-3">
-          <CardHeader><CardTitle className="text-sm">{streaming ? "Streaming…" : selectedVersion ? `Version ${selectedVersion}` : "Preview"}</CardTitle></CardHeader>
+        <Card className="md:col-span-3 order-1 md:order-2">
+          <CardHeader className="pb-2"><CardTitle className="text-sm">{streaming ? "Streaming…" : selectedVersion ? `Version ${selectedVersion}` : "Preview"}</CardTitle></CardHeader>
           <CardContent>
             {display ? (
-              <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed">{display}</pre>
+              <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed max-w-full overflow-x-auto">{display}</pre>
             ) : (
               <p className="text-sm text-muted-foreground">Click "Generate new version" to draft a {label.toLowerCase()}.</p>
             )}

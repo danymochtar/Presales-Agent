@@ -39,58 +39,106 @@ export function UsersList({ initial, currentUserId }: { initial: Row[]; currentU
 
   return (
     <div className="space-y-3">
-      <table className="w-full text-sm">
-        <thead className="text-xs text-muted-foreground">
-          <tr className="border-b">
-            <th className="text-left py-2">Email</th>
-            <th className="text-left">Name</th>
-            <th className="text-left">Role</th>
-            <th className="text-left">Joined</th>
-            <th className="text-right">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {users.map((u) => {
-            const isMe = u.id === currentUserId;
-            return (
-              <tr key={u.id} className="border-b last:border-0">
-                <td className="py-2">
-                  {u.email}
-                  {isMe && <span className="ml-1.5 text-[10px] uppercase text-muted-foreground">you</span>}
-                </td>
-                <td>{u.name}</td>
-                <td>
-                  <span className={`text-[10px] uppercase rounded px-1.5 py-0.5 ${
-                    u.role === "superadmin"
-                      ? "bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200"
-                      : "bg-accent"
-                  }`}>
-                    {u.role}
-                  </span>
-                </td>
-                <td className="text-muted-foreground">{new Date(u.createdAt).toLocaleDateString()}</td>
-                <td className="text-right space-x-1">
-                  {u.role === "user" ? (
-                    <Button size="sm" variant="outline" onClick={() => setRole(u, "superadmin")} disabled={busy === u.id}>
-                      Promote
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setRole(u, "user")}
-                      disabled={busy === u.id || isMe}
-                      title={isMe ? "Promote another user first if you want to demote yourself" : undefined}
-                    >
-                      Demote
-                    </Button>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+      {/* Mobile: card layout */}
+      <ul className="space-y-2 md:hidden">
+        {users.map((u) => {
+          const isMe = u.id === currentUserId;
+          return (
+            <li key={u.id} className="border rounded-md p-3 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">
+                    {u.email}
+                    {isMe && <span className="ml-1.5 text-[10px] uppercase text-muted-foreground">you</span>}
+                  </p>
+                  {u.name && <p className="text-xs text-muted-foreground truncate">{u.name}</p>}
+                </div>
+                <span className={`text-[10px] uppercase rounded px-1.5 py-0.5 shrink-0 ${
+                  u.role === "superadmin"
+                    ? "bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200"
+                    : "bg-accent"
+                }`}>
+                  {u.role}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-muted-foreground">Joined {new Date(u.createdAt).toLocaleDateString()}</span>
+                {u.role === "user" ? (
+                  <Button size="sm" variant="outline" onClick={() => setRole(u, "superadmin")} disabled={busy === u.id}>
+                    Promote
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setRole(u, "user")}
+                    disabled={busy === u.id || isMe}
+                    title={isMe ? "Promote another user first if you want to demote yourself" : undefined}
+                  >
+                    Demote
+                  </Button>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+
+      {/* Desktop: table */}
+      <div className="hidden md:block overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="text-xs text-muted-foreground">
+            <tr className="border-b">
+              <th className="text-left py-2">Email</th>
+              <th className="text-left">Name</th>
+              <th className="text-left">Role</th>
+              <th className="text-left">Joined</th>
+              <th className="text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map((u) => {
+              const isMe = u.id === currentUserId;
+              return (
+                <tr key={u.id} className="border-b last:border-0">
+                  <td className="py-2">
+                    {u.email}
+                    {isMe && <span className="ml-1.5 text-[10px] uppercase text-muted-foreground">you</span>}
+                  </td>
+                  <td>{u.name}</td>
+                  <td>
+                    <span className={`text-[10px] uppercase rounded px-1.5 py-0.5 ${
+                      u.role === "superadmin"
+                        ? "bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200"
+                        : "bg-accent"
+                    }`}>
+                      {u.role}
+                    </span>
+                  </td>
+                  <td className="text-muted-foreground whitespace-nowrap">{new Date(u.createdAt).toLocaleDateString()}</td>
+                  <td className="text-right space-x-1">
+                    {u.role === "user" ? (
+                      <Button size="sm" variant="outline" onClick={() => setRole(u, "superadmin")} disabled={busy === u.id}>
+                        Promote
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setRole(u, "user")}
+                        disabled={busy === u.id || isMe}
+                        title={isMe ? "Promote another user first if you want to demote yourself" : undefined}
+                      >
+                        Demote
+                      </Button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
       {err && <p className="text-xs text-destructive">{err}</p>}
     </div>
   );

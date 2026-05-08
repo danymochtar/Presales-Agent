@@ -109,39 +109,41 @@ export default async function UsagePage() {
           {byPurpose.length === 0 ? (
             <p className="text-sm text-muted-foreground">No instrumented calls yet. Currently the project-extraction step + BOM generation are logged; other deliverables come in a follow-up MVP.</p>
           ) : (
-            <table className="w-full text-sm">
-              <thead className="text-xs text-muted-foreground">
-                <tr className="border-b">
-                  <th className="text-left py-2">Purpose</th>
-                  <th className="text-left">Model</th>
-                  <th className="text-right">Calls</th>
-                  <th className="text-right">In tokens</th>
-                  <th className="text-right">Out tokens</th>
-                  <th className="text-right">Total tokens</th>
-                  <th className="text-right">Est cost (USD)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {byPurpose
-                  .sort((a, b) => (b._sum.totalTokens ?? 0) - (a._sum.totalTokens ?? 0))
-                  .map((b) => {
-                    const inT = b._sum.inputTokens ?? 0;
-                    const outT = b._sum.outputTokens ?? 0;
-                    const cost = estimateCostUsd(b.model, inT, outT);
-                    return (
-                      <tr key={`${b.purpose}-${b.model}`} className="border-b last:border-0">
-                        <td className="py-1.5">{PURPOSE_LABELS[b.purpose] ?? b.purpose}</td>
-                        <td className="text-muted-foreground">{b.model}</td>
-                        <td className="text-right">{b._count._all}</td>
-                        <td className="text-right">{inT.toLocaleString()}</td>
-                        <td className="text-right">{outT.toLocaleString()}</td>
-                        <td className="text-right">{(b._sum.totalTokens ?? 0).toLocaleString()}</td>
-                        <td className="text-right">{cost.toFixed(4)}</td>
-                      </tr>
-                    );
-                  })}
-              </tbody>
-            </table>
+            <div className="overflow-x-auto -mx-4 sm:-mx-6 px-4 sm:px-6">
+              <table className="w-full text-sm min-w-[640px]">
+                <thead className="text-xs text-muted-foreground">
+                  <tr className="border-b">
+                    <th className="text-left py-2">Purpose</th>
+                    <th className="text-left">Model</th>
+                    <th className="text-right">Calls</th>
+                    <th className="text-right">In tokens</th>
+                    <th className="text-right">Out tokens</th>
+                    <th className="text-right">Total tokens</th>
+                    <th className="text-right whitespace-nowrap">Est cost (USD)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {byPurpose
+                    .sort((a, b) => (b._sum.totalTokens ?? 0) - (a._sum.totalTokens ?? 0))
+                    .map((b) => {
+                      const inT = b._sum.inputTokens ?? 0;
+                      const outT = b._sum.outputTokens ?? 0;
+                      const cost = estimateCostUsd(b.model, inT, outT);
+                      return (
+                        <tr key={`${b.purpose}-${b.model}`} className="border-b last:border-0">
+                          <td className="py-1.5 whitespace-nowrap">{PURPOSE_LABELS[b.purpose] ?? b.purpose}</td>
+                          <td className="text-muted-foreground whitespace-nowrap">{b.model}</td>
+                          <td className="text-right">{b._count._all}</td>
+                          <td className="text-right">{inT.toLocaleString()}</td>
+                          <td className="text-right">{outT.toLocaleString()}</td>
+                          <td className="text-right">{(b._sum.totalTokens ?? 0).toLocaleString()}</td>
+                          <td className="text-right">{cost.toFixed(4)}</td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -150,29 +152,31 @@ export default async function UsagePage() {
         <Card>
           <CardHeader><CardTitle>By user (30d)</CardTitle></CardHeader>
           <CardContent>
-            <table className="w-full text-sm">
-              <thead className="text-xs text-muted-foreground">
-                <tr className="border-b">
-                  <th className="text-left py-2">User</th>
-                  <th className="text-left">Role</th>
-                  <th className="text-right">Calls</th>
-                  <th className="text-right">Total tokens</th>
-                </tr>
-              </thead>
-              <tbody>
-                {byUser.map((b) => {
-                  const u = b.userId ? userMap.get(b.userId) : null;
-                  return (
-                    <tr key={b.userId ?? "anon"} className="border-b last:border-0">
-                      <td className="py-1.5">{u?.email ?? "(unknown)"}</td>
-                      <td className="text-muted-foreground">{u?.role ?? "—"}</td>
-                      <td className="text-right">{b._count._all}</td>
-                      <td className="text-right">{(b._sum.totalTokens ?? 0).toLocaleString()}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <div className="overflow-x-auto -mx-4 sm:-mx-6 px-4 sm:px-6">
+              <table className="w-full text-sm min-w-[480px]">
+                <thead className="text-xs text-muted-foreground">
+                  <tr className="border-b">
+                    <th className="text-left py-2">User</th>
+                    <th className="text-left">Role</th>
+                    <th className="text-right">Calls</th>
+                    <th className="text-right whitespace-nowrap">Total tokens</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {byUser.map((b) => {
+                    const u = b.userId ? userMap.get(b.userId) : null;
+                    return (
+                      <tr key={b.userId ?? "anon"} className="border-b last:border-0">
+                        <td className="py-1.5 truncate max-w-[200px]">{u?.email ?? "(unknown)"}</td>
+                        <td className="text-muted-foreground">{u?.role ?? "—"}</td>
+                        <td className="text-right">{b._count._all}</td>
+                        <td className="text-right">{(b._sum.totalTokens ?? 0).toLocaleString()}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -185,32 +189,34 @@ export default async function UsagePage() {
               No calls logged yet. Try generating a project from <Link className="underline" href="/projects/new">/projects/new</Link>.
             </p>
           ) : (
-            <table className="w-full text-xs">
-              <thead className="text-muted-foreground">
-                <tr className="border-b">
-                  <th className="text-left py-2">When</th>
-                  <th className="text-left">Purpose</th>
-                  <th className="text-left">Model</th>
-                  <th className="text-right">In</th>
-                  <th className="text-right">Out</th>
-                  <th className="text-right">ms</th>
-                  <th className="text-right">OK</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recent.map((r) => (
-                  <tr key={r.id} className="border-b last:border-0">
-                    <td className="py-1.5 whitespace-nowrap">{new Date(r.createdAt).toLocaleString()}</td>
-                    <td>{PURPOSE_LABELS[r.purpose] ?? r.purpose}</td>
-                    <td className="text-muted-foreground">{r.model}</td>
-                    <td className="text-right">{r.inputTokens.toLocaleString()}</td>
-                    <td className="text-right">{r.outputTokens.toLocaleString()}</td>
-                    <td className="text-right">{r.durationMs.toLocaleString()}</td>
-                    <td className="text-right">{r.succeeded ? "✓" : "✗"}</td>
+            <div className="overflow-x-auto -mx-4 sm:-mx-6 px-4 sm:px-6">
+              <table className="w-full text-xs min-w-[640px]">
+                <thead className="text-muted-foreground">
+                  <tr className="border-b">
+                    <th className="text-left py-2">When</th>
+                    <th className="text-left">Purpose</th>
+                    <th className="text-left">Model</th>
+                    <th className="text-right">In</th>
+                    <th className="text-right">Out</th>
+                    <th className="text-right">ms</th>
+                    <th className="text-right">OK</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {recent.map((r) => (
+                    <tr key={r.id} className="border-b last:border-0">
+                      <td className="py-1.5 whitespace-nowrap">{new Date(r.createdAt).toLocaleString()}</td>
+                      <td className="whitespace-nowrap">{PURPOSE_LABELS[r.purpose] ?? r.purpose}</td>
+                      <td className="text-muted-foreground whitespace-nowrap">{r.model}</td>
+                      <td className="text-right">{r.inputTokens.toLocaleString()}</td>
+                      <td className="text-right">{r.outputTokens.toLocaleString()}</td>
+                      <td className="text-right">{r.durationMs.toLocaleString()}</td>
+                      <td className="text-right">{r.succeeded ? "✓" : "✗"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </CardContent>
       </Card>

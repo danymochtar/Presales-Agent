@@ -208,14 +208,14 @@ export function SmartWorkflow({
       </div>
 
       {/* Run controls */}
-      <div className="flex items-end gap-3 flex-wrap">
-        <div className="space-y-1">
+      <div className="flex flex-col sm:flex-row sm:items-end gap-3 sm:flex-wrap">
+        <div className="space-y-1 w-full sm:w-auto">
           <label className="text-xs text-muted-foreground">Run for cloud</label>
           <select
             value={cloud}
             onChange={(e) => setCloud(e.target.value)}
             disabled={running}
-            className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+            className="flex h-10 w-full sm:w-auto rounded-md border border-input bg-background px-3 py-2 text-sm"
           >
             {cloudOptions.map((c) => (
               <option key={c} value={c}>{c.toUpperCase()}</option>
@@ -223,10 +223,10 @@ export function SmartWorkflow({
             {cloudOptions.length >= 2 && <option value="compare">Compare</option>}
           </select>
         </div>
-        <Button onClick={run} disabled={running || !hasInventory || selected.size === 0} className="h-10">
-          {running ? `Running ${stepStage ? STAGES[stepStage].label : "…"}` : done ? "Pipeline complete ✓" : `Generate ${selected.size} suggested deliverable${selected.size === 1 ? "" : "s"}`}
+        <Button onClick={run} disabled={running || !hasInventory || selected.size === 0} className="h-10 w-full sm:w-auto">
+          {running ? `Running ${stepStage ? STAGES[stepStage].label : "…"}` : done ? "Pipeline complete ✓" : `Generate ${selected.size} deliverable${selected.size === 1 ? "" : "s"}`}
         </Button>
-        <Button variant="ghost" size="sm" onClick={() => setCustomizing(!customizing)} disabled={running}>
+        <Button variant="ghost" size="sm" onClick={() => setCustomizing(!customizing)} disabled={running} className="w-full sm:w-auto">
           {customizing ? "Hide customize" : "Customize selection"}
         </Button>
         {!hasInventory && (

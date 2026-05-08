@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireSessionAndTenant } from "@/lib/tenant";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { CloudChip } from "@/components/cloud-chip";
 
 const PROJECT_TYPE_LABELS: Record<string, string> = {
   migration: "Migration",
@@ -160,11 +161,7 @@ export default async function DashboardPage() {
                           </p>
                           <div className="flex items-center gap-3 mt-2 flex-wrap">
                             <div className="flex gap-1">
-                              {targetClouds.map((c) => (
-                                <span key={c} className="text-[10px] uppercase tracking-wider rounded px-1.5 py-0.5 bg-accent">
-                                  {c}
-                                </span>
-                              ))}
+                              {targetClouds.map((c) => <CloudChip key={c} cloud={c} size="xs" />)}
                             </div>
                             <ProgressDots completed={completed} total={total} />
                             <span className="text-xs text-muted-foreground">
@@ -202,8 +199,8 @@ export default async function DashboardPage() {
                       <span className="text-muted-foreground">Generated </span>
                       <span className="font-medium">{DELIVERABLE_LABELS[d.type] ?? d.type}</span>
                       {d.cloudProvider && (
-                        <span className="text-xs ml-1.5 rounded px-1.5 py-0.5 bg-accent">
-                          {CLOUD_LABELS[d.cloudProvider] ?? d.cloudProvider}
+                        <span className="ml-1.5 inline-block align-middle">
+                          <CloudChip cloud={d.cloudProvider} size="xs" />
                         </span>
                       )}
                       <span className="text-muted-foreground"> for </span>
@@ -230,14 +227,19 @@ export default async function DashboardPage() {
                   const count = cloudCounts[cloud] ?? 0;
                   if (count === 0 && cloud !== "azure" && cloud !== "aws") return null;
                   const pct = totalDeliverables > 0 ? Math.round((count / totalDeliverables) * 100) : 0;
+                  const barColor =
+                    cloud === "azure" ? "bg-[hsl(214_80%_55%)]" :
+                    cloud === "aws" ? "bg-[hsl(25_90%_55%)]" :
+                    cloud === "gcp" ? "bg-[hsl(142_70%_45%)]" :
+                    "bg-[hsl(270_60%_55%)]";
                   return (
                     <li key={cloud}>
                       <div className="flex justify-between items-baseline mb-1">
-                        <span className="text-xs uppercase tracking-wider">{CLOUD_LABELS[cloud]}</span>
+                        <CloudChip cloud={cloud} size="xs" />
                         <span className="text-xs text-muted-foreground">{count} · {pct}%</span>
                       </div>
                       <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                        <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
+                        <div className={`h-full ${barColor}`} style={{ width: `${pct}%` }} />
                       </div>
                     </li>
                   );
