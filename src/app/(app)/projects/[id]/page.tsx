@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { UploadInputForm } from "@/components/upload-input-form";
 import { ProjectModeToggle } from "@/components/project-mode-toggle";
 import { ExtractWorkloadsButton } from "@/components/extract-workloads-button";
+import { RunPipelineButton } from "@/components/run-pipeline-button";
 
 const CLOUD_LABEL: Record<string, string> = {
   azure: "Azure",
@@ -43,6 +44,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   const latestInput = project.inputs[0];
   const hasBom = boms.length > 0;
   const hasInput = !!latestInput;
+  const hasInventory = project.inputs.some((i) => i.workloadsJson);
 
   return (
     <div className="space-y-6">
@@ -106,6 +108,24 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
               })}
             </ul>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Workflow</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Run the full presales pipeline for one cloud — Assessment → Architecture → BOM → TCO →
+            Project Plan → Proposal — sequentially, in the order each downstream deliverable expects.
+            Each stage saves as a new version. Re-running adds new versions on top.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <RunPipelineButton
+            projectId={project.id}
+            targetClouds={targetClouds}
+            hasInventory={hasInventory}
+          />
         </CardContent>
       </Card>
 

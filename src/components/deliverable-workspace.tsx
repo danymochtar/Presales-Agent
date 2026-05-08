@@ -87,7 +87,13 @@ export function DeliverableWorkspace({
         }
       }
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "stream failed");
+      const raw = e instanceof Error ? e.message : "stream failed";
+      // iOS Safari uses "Load failed" as a generic network/abort error during
+      // streaming. Translate to a clearer hint pointing to retry.
+      const friendly = /load failed|network|aborted|fetch/i.test(raw)
+        ? "Stream was interrupted (network or function timeout). The partial content above is still in-memory — click Generate again to retry. If this happens repeatedly, try a smaller scope or re-run from the Workflow pipeline button on the project page."
+        : raw;
+      setErr(friendly);
     } finally {
       setStreaming(false);
     }
