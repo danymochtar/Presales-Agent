@@ -23,7 +23,7 @@ export function TrainingPanel({
   draftContent,
 }: {
   projectId: string;
-  deliverableType: "bom" | "proposal" | "architecture" | "assessment" | "project_plan";
+  deliverableType: "bom" | "proposal" | "architecture" | "assessment" | "project_plan" | "tco";
   draftContent: string | null;
 }) {
   const router = useRouter();

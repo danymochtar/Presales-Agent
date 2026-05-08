@@ -28,7 +28,7 @@ export function DeliverableWorkspace({
   projectId: string;
   projectName: string;
   projectMode: "production" | "training";
-  deliverableType: "bom" | "proposal" | "architecture" | "assessment" | "project_plan";
+  deliverableType: "bom" | "proposal" | "architecture" | "assessment" | "project_plan" | "tco";
   generatePath: string;
   prerequisiteMessage: string | null;
   canGenerate: boolean;
@@ -51,6 +51,7 @@ export function DeliverableWorkspace({
     architecture: "Architecture",
     assessment: "Assessment",
     project_plan: "Project plan",
+    tco: "TCO",
   };
   const label = labels[deliverableType] ?? deliverableType;
 
