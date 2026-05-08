@@ -259,13 +259,14 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      {/* Settings strip */}
       <div className="text-xs text-muted-foreground border-t pt-3 flex items-center gap-3 flex-wrap">
         <span>Rate card: <Link href="/settings/rate-card" className="underline">{rateCount} roles</Link></span>
         <span>·</span>
         <span>Service catalog: <Link href="/settings/service-catalog" className="underline">{catalogCount} services</Link></span>
         <span>·</span>
         <span>Learned patterns: <Link href="/settings/patterns" className="underline">{patternCount} active</Link></span>
+        <span>·</span>
+        <Link href="/services" className="underline">Cloud service comparison</Link>
         <span>·</span>
         <Link href="/settings" className="underline">All settings</Link>
       </div>
