@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { UploadInputForm } from "@/components/upload-input-form";
 import { ProjectModeToggle } from "@/components/project-mode-toggle";
 import { ExtractWorkloadsButton } from "@/components/extract-workloads-button";
-import { RunPipelineButton } from "@/components/run-pipeline-button";
+import { SmartWorkflow } from "@/components/smart-workflow";
 
 const CLOUD_LABEL: Record<string, string> = {
   azure: "Azure",
@@ -45,6 +45,25 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   const hasBom = boms.length > 0;
   const hasInput = !!latestInput;
   const hasInventory = project.inputs.some((i) => i.workloadsJson);
+
+  // Build map: cloud -> list of stage IDs with at least one version. Stage IDs
+  // here use the kebab-case form ("project-plan") matching SmartWorkflow.
+  const STAGE_FROM_TYPE: Record<string, string> = {
+    assessment: "assessment",
+    architecture: "architecture",
+    bom: "bom",
+    tco: "tco",
+    project_plan: "project-plan",
+    proposal: "proposal",
+  };
+  const existingByStage: Record<string, string[]> = {};
+  for (const d of project.deliverables) {
+    const stage = STAGE_FROM_TYPE[d.type];
+    if (!stage) continue;
+    const cloud = d.cloudProvider ?? "azure";
+    if (!existingByStage[cloud]) existingByStage[cloud] = [];
+    if (!existingByStage[cloud].includes(stage)) existingByStage[cloud].push(stage);
+  }
 
   return (
     <div className="space-y-6">
@@ -113,18 +132,23 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
 
       <Card>
         <CardHeader>
-          <CardTitle>Workflow</CardTitle>
+          <CardTitle>Smart workflow</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Run the full presales pipeline for one cloud — Assessment → Architecture → BOM → TCO →
-            Project Plan → Proposal — sequentially, in the order each downstream deliverable expects.
-            Each stage saves as a new version. Re-running adds new versions on top.
+            The agent classifies the engagement type from your uploads and recommends the deliverable
+            sequence. One click runs them in dependency order. Customize the selection if the
+            recommendation isn't right.
           </p>
         </CardHeader>
         <CardContent>
-          <RunPipelineButton
+          <SmartWorkflow
             projectId={project.id}
+            projectType={project.projectType}
+            projectTypeConfidence={project.projectTypeConfidence}
+            projectTypeRationale={project.projectTypeRationale}
+            suggestedDeliverables={project.suggestedDeliverables ?? []}
             targetClouds={targetClouds}
             hasInventory={hasInventory}
+            existingByStage={existingByStage}
           />
         </CardContent>
       </Card>

@@ -15,6 +15,9 @@ const InputSeed = z.object({
   workloadsJson: z.unknown().optional(),
 });
 
+const ProjectTypeEnum = z.enum(["migration", "greenfield", "modernization", "dr", "poc", "optimization", "unknown"]);
+const StageEnum = z.enum(["assessment", "architecture", "bom", "tco", "project-plan", "proposal"]);
+
 const CreateProject = z.object({
   name: z.string().min(2),
   customer: z.string().min(2),
@@ -24,6 +27,10 @@ const CreateProject = z.object({
   targetClouds: z.array(CloudEnum).min(1).default(["azure"]),
   cloudRegions: z.record(z.string(), z.object({ primary: z.string(), dr: z.string() })).optional(),
   primaryCloud: CloudEnum.optional(),
+  projectType: ProjectTypeEnum.optional(),
+  projectTypeConfidence: z.enum(["high", "medium", "low"]).optional(),
+  projectTypeRationale: z.string().optional(),
+  suggestedDeliverables: z.array(StageEnum).optional(),
   mode: z.enum(["production", "training"]).default("production"),
   // MVP 2.5: seeded inputs from upload-first wizard. Created in same transaction.
   inputs: z.array(InputSeed).optional(),
@@ -60,7 +67,7 @@ export async function POST(req: NextRequest) {
   const parsed = CreateProject.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-  const { targetClouds, cloudRegions, inputs, ...rest } = parsed.data;
+  const { targetClouds, cloudRegions, inputs, suggestedDeliverables, ...rest } = parsed.data;
   const regions = cloudRegions ?? defaultRegionsFor(targetClouds);
   const firstCloud = targetClouds[0];
   const primaryRegion = regions[firstCloud]?.primary ?? DEFAULT_REGIONS.azure.primary;
@@ -74,6 +81,7 @@ export async function POST(req: NextRequest) {
         cloudRegions: regions as object,
         primaryRegion,
         drRegion,
+        suggestedDeliverables: suggestedDeliverables ?? [],
         tenantId: tenant.id,
       },
     });

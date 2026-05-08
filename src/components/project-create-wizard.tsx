@@ -25,6 +25,9 @@ type ParsedFile = {
 
 type Confidence = "high" | "medium" | "low";
 
+type ProjectType = "migration" | "greenfield" | "modernization" | "dr" | "poc" | "optimization" | "unknown";
+type Stage = "assessment" | "architecture" | "bom" | "tco" | "project-plan" | "proposal";
+
 type Extracted = {
   projectName: string;
   customer: string | null;
@@ -35,6 +38,9 @@ type Extracted = {
   cloudRegions: Record<string, { primary: string; dr: string }>;
   keyRequirements: string[];
   constraints: string[];
+  projectType: ProjectType;
+  projectTypeRationale: string;
+  suggestedDeliverables: Stage[];
   confidence: {
     customer: Confidence;
     industry: Confidence;
@@ -42,7 +48,27 @@ type Extracted = {
     scopeSummary: Confidence;
     targetClouds: Confidence;
     cloudRegions: Confidence;
+    projectType: Confidence;
   };
+};
+
+const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {
+  migration: "Migration",
+  greenfield: "Greenfield (new build)",
+  modernization: "Modernization",
+  dr: "DR / Resilience",
+  poc: "POC / Pilot",
+  optimization: "Optimization / FinOps",
+  unknown: "Unclear (review needed)",
+};
+
+const STAGE_LABELS: Record<Stage, string> = {
+  assessment: "Assessment",
+  architecture: "Architecture",
+  bom: "BOM",
+  tco: "TCO",
+  "project-plan": "Project plan",
+  proposal: "Proposal",
 };
 
 type Step = "upload" | "review" | "submitting";
@@ -196,6 +222,10 @@ export function ProjectCreateWizard() {
           targetClouds,
           cloudRegions,
           inputs,
+          projectType: extracted?.projectType,
+          projectTypeConfidence: extracted?.confidence?.projectType,
+          projectTypeRationale: extracted?.projectTypeRationale,
+          suggestedDeliverables: extracted?.suggestedDeliverables,
         }),
       });
       const data = await res.json();
@@ -295,6 +325,29 @@ export function ProjectCreateWizard() {
             {extracted && parsedFiles.length > 0 && (
               <div className="text-xs text-muted-foreground border rounded-md p-2">
                 Sources: {parsedFiles.map((f) => f.filename).join(" · ")}
+              </div>
+            )}
+
+            {extracted && (
+              <div className="rounded-md border bg-primary/5 p-3 space-y-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs uppercase tracking-wider text-muted-foreground">Detected project type</span>
+                  <span className="text-sm font-medium">{PROJECT_TYPE_LABELS[extracted.projectType]}</span>
+                  {extracted.confidence?.projectType && (
+                    <span className={`text-[10px] uppercase rounded px-1.5 py-0.5 ${CONFIDENCE_CHIP[extracted.confidence.projectType]}`}>
+                      {extracted.confidence.projectType}
+                    </span>
+                  )}
+                </div>
+                {extracted.projectTypeRationale && (
+                  <p className="text-xs text-muted-foreground italic">"{extracted.projectTypeRationale}"</p>
+                )}
+                {extracted.suggestedDeliverables.length > 0 && (
+                  <div className="text-xs">
+                    <span className="text-muted-foreground">Suggested flow: </span>
+                    <span>{extracted.suggestedDeliverables.map((s) => STAGE_LABELS[s]).join(" → ")}</span>
+                  </div>
+                )}
               </div>
             )}
 

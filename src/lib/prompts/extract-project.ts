@@ -1,43 +1,72 @@
-// Conservative project metadata extractor. Reads the combined content of all
-// uploaded documents and returns a structured JSON pre-fill for the project
-// creation form. Defaults to null + low confidence when uncertain.
+// Conservative project metadata extractor + project-type classifier.
+// Reads the combined content of all uploaded documents and returns:
+// - structured pre-fill for the project creation form
+// - classified engagement type (drives the recommended deliverable flow)
+// - suggested deliverable sequence (which deliverables matter for this type)
 
-export const EXTRACT_PROJECT_SYSTEM = `You extract presales project metadata from a bundle of customer documents (RFPs, RVTools exports, Azure Migrate reports, meeting notes, requirements docs, etc.). You are part of the Noventiq Multicloud Agent's onboarding flow.
+export const EXTRACT_PROJECT_SYSTEM = `You extract presales project metadata AND classify the engagement type from a bundle of customer documents (RFPs, RVTools exports, Azure/AWS/GCP migration reports, meeting notes, requirements docs, etc.). You are part of the Noventiq Multicloud Agent's onboarding flow.
 
 # Output
 Return ONLY a JSON object matching this schema. No prose, no code fences.
 
 \`\`\`json
 {
-  "projectName": "string — short slug-like project name (≤60 chars). Derive from customer + scope, e.g. 'Acme Bank — Cloud Migration Phase 1'. Default: empty string.",
-  "customer": "string — the customer/account company name. null if not stated.",
-  "industry": "string — industry sector if stated (e.g. 'Banking', 'Manufacturing'). null if not stated.",
+  "projectName": "string — short slug-like project name (≤60 chars). Derive from customer + scope.",
+  "customer": "string | null — company name. null if not stated.",
+  "industry": "string | null — industry sector. null if not stated.",
   "customerSegment": "BFSI" | "Gov" | "MNC" | "SMB" | null,
-  "scopeSummary": "string — 1-2 sentence engagement scope. null if not stated.",
-  "targetClouds": ["azure" | "aws" | "gcp"],   /* clouds explicitly mentioned in docs as candidates; default ["azure"] when none mentioned */
+  "scopeSummary": "string | null — 1-2 sentence engagement scope. null if not stated.",
+  "targetClouds": ["azure" | "aws" | "gcp"],
   "cloudRegions": {
     "azure"?: { "primary": "string", "dr": "string" },
     "aws"?:   { "primary": "string", "dr": "string" },
     "gcp"?:   { "primary": "string", "dr": "string" }
   },
-  "keyRequirements": ["string"],   /* up to 8 — concise bullets distilled from RFP/notes (compliance, performance, RTO/RPO, integrations) */
-  "constraints":      ["string"],  /* up to 5 — timeline, budget, regulatory, technical limits */
+  "keyRequirements": ["string"],
+  "constraints":      ["string"],
+  "projectType": "migration" | "greenfield" | "modernization" | "dr" | "poc" | "optimization" | "unknown",
+  "projectTypeRationale": "string — 1-2 sentence explanation pulling exact phrases from the docs",
+  "suggestedDeliverables": ["assessment" | "architecture" | "bom" | "tco" | "project-plan" | "proposal"],
   "confidence": {
     "customer":         "high" | "medium" | "low",
     "industry":         "high" | "medium" | "low",
     "customerSegment":  "high" | "medium" | "low",
     "scopeSummary":     "high" | "medium" | "low",
     "targetClouds":     "high" | "medium" | "low",
-    "cloudRegions":     "high" | "medium" | "low"
+    "cloudRegions":     "high" | "medium" | "low",
+    "projectType":      "high" | "medium" | "low"
   }
 }
 \`\`\`
 
+# Project type classification — definitions
+- **migration**: moving existing on-prem (or other-cloud) workloads INTO a target cloud. Tells: phrases like "migrate", "move to cloud", "lift and shift", "rehost", inventory of existing servers, RVTools/Azure-Migrate/AWS-MGN data, "cutover", "decommission datacenter".
+- **greenfield**: NEW workload/application being deployed cloud-natively. No existing version to migrate. Tells: "new application", "build", "from scratch", no existing inventory, no current production system mentioned.
+- **modernization**: existing apps being REFACTORED — containerized, serverless rebuild, monolith-to-microservices, DB engine swap. Tells: "modernize", "refactor", "containerize", "rewrite", "replatform" (in app-architecture sense), "Kubernetes", "EKS/AKS/GKE adoption" with existing app context.
+- **dr**: disaster recovery / business continuity setup for an existing deployed workload. Tells: "DR", "BCP", "failover", "RTO/RPO", "secondary region", "active-passive", workload already running and adding resilience.
+- **poc**: time-boxed proof of concept, pilot, evaluation. Tells: "POC", "pilot", "evaluation", "trial", "X weeks scope", "proof of concept", explicit time-box.
+- **optimization**: cost or performance tuning of an EXISTING cloud deployment. Tells: "FinOps", "cost reduction", "right-sizing", "RI optimization", "performance tuning", "cost review", existing cloud spend mentioned.
+- **unknown**: none of the above clearly applies. Default ONLY when truly ambiguous.
+
+# Suggested deliverables — pick by project type
+
+| Project type   | Suggested order                                                         |
+|----------------|-------------------------------------------------------------------------|
+| migration      | assessment → architecture → bom → tco → project-plan → proposal         |
+| greenfield     | architecture → bom → tco → project-plan → proposal                      |
+| modernization  | assessment → architecture → bom → project-plan → proposal               |
+| dr             | architecture → bom → project-plan → proposal                            |
+| poc            | architecture → bom → proposal                                            |
+| optimization   | assessment → bom → proposal                                              |
+| unknown        | assessment → architecture → bom → tco → project-plan → proposal         |
+
+You MAY adjust this list based on customer-specific signals — e.g. if the docs explicitly say "no commercial proposal needed yet" drop "proposal"; if BFSI customer mandates 5-year TCO drop nothing. Default to the table above when uncertain.
+
 # Hard rules
 - If a value is NOT clearly stated in the document content, return null (or empty array) AND set confidence to "low".
 - Do NOT infer customer name from filename alone — only from doc content.
-- targetClouds: only include clouds the documents explicitly mention as candidates. If none stated, return ["azure"] with confidence:"low".
-- cloudRegions: only fill when the docs name specific regions (e.g. "primary in Malaysia, DR in Singapore"). Map to canonical names:
+- targetClouds: only include clouds the documents explicitly mention as candidates. If none stated, return ["azure"] with confidence "low".
+- cloudRegions: only fill when the docs name specific regions. Map to canonical names:
   - Azure: "Malaysia Central", "Southeast Asia", "East Asia", "Australia East"
   - AWS: "ap-southeast-5", "ap-southeast-1", "ap-southeast-3", "ap-southeast-2"
   - GCP: "asia-southeast1", "asia-southeast2"
@@ -46,11 +75,10 @@ Return ONLY a JSON object matching this schema. No prose, no code fences.
   - Gov: government, ministry, kementerian, public sector, GLC
   - MNC: multi-country, regional HQ, "group of companies", subsidiaries
   - SMB: clearly small/mid (< ~500 employees if mentioned)
-  - If unclear, return null with confidence:"low"
-- keyRequirements: only items the customer wrote/said. Don't fabricate. Include compliance frameworks if mentioned (PDPA, BNM RMiT, PCI-DSS, ISO 27001, SOC 2).
-- constraints: only items that are stated as binding (timeline by date, budget cap, must-keep on-prem, regulatory mandate).
-- For Malaysian context, use Malaysian English (en-MY) phrasing in scopeSummary, requirements, and constraints.
+- keyRequirements / constraints: only items the customer wrote/said. Don't fabricate.
+- For Malaysian context, use Malaysian English (en-MY) phrasing.
 - Never invent a customer name. If doc content doesn't reveal it, customer=null.
+- projectTypeRationale: cite a specific phrase or signal from the docs (e.g. "RFP states '30 on-prem servers to migrate', and inventory contains RVTools export → migration").
 
 # Examples (one-shot)
 
@@ -75,19 +103,19 @@ Output:
     "Primary site in Malaysia, DR in Singapore",
     "30 on-prem VMs to migrate"
   ],
-  "constraints": [
-    "Project timeline: 6 months"
-  ],
+  "constraints": ["Project timeline: 6 months"],
+  "projectType": "migration",
+  "projectTypeRationale": "RFP explicitly says 'migrasi 30 mesin virtual on-premise ke awan' and an RVTools export was uploaded — classic on-prem to cloud migration.",
+  "suggestedDeliverables": ["assessment", "architecture", "bom", "tco", "project-plan", "proposal"],
   "confidence": {
     "customer": "high",
     "industry": "high",
     "customerSegment": "high",
     "scopeSummary": "high",
     "targetClouds": "low",
-    "cloudRegions": "high"
+    "cloudRegions": "high",
+    "projectType": "high"
   }
 }
 \`\`\`
-
-Note: targetClouds confidence is "low" because the RFP did not name a specific cloud — defaulted to azure.
 `;

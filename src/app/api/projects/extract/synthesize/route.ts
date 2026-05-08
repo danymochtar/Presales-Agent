@@ -61,6 +61,23 @@ const Cloud = z.preprocess(
   z.enum(["azure", "aws", "gcp"]),
 );
 
+const ProjectType = z.preprocess((v) => {
+  if (typeof v !== "string") return "unknown";
+  const lower = v.toLowerCase().trim();
+  if (["migration", "greenfield", "modernization", "dr", "poc", "optimization"].includes(lower)) return lower;
+  if (lower === "modernisation") return "modernization";
+  if (lower === "disaster recovery") return "dr";
+  if (lower === "proof of concept" || lower === "pilot") return "poc";
+  return "unknown";
+}, z.enum(["migration", "greenfield", "modernization", "dr", "poc", "optimization", "unknown"]));
+
+const Stage = z.preprocess((v) => {
+  if (typeof v !== "string") return undefined;
+  const lower = v.toLowerCase().trim().replace(/_/g, "-");
+  if (["assessment", "architecture", "bom", "tco", "project-plan", "proposal"].includes(lower)) return lower;
+  return undefined;
+}, z.enum(["assessment", "architecture", "bom", "tco", "project-plan", "proposal"]));
+
 // Schema enforced via generateObject — the AI SDK uses tool-calling under the
 // hood to make the model produce conforming JSON. Far more robust than parsing
 // generateText output by hand.
@@ -78,6 +95,9 @@ const ExtractedShape = z.object({
     .transform((v) => v ?? {}),
   keyRequirements: z.array(z.string()).nullable().optional().transform((v) => v ?? []),
   constraints: z.array(z.string()).nullable().optional().transform((v) => v ?? []),
+  projectType: ProjectType.optional().default("unknown"),
+  projectTypeRationale: z.string().nullable().optional().transform((v) => v ?? ""),
+  suggestedDeliverables: z.array(Stage).nullable().optional().transform((v) => v ?? []),
   confidence: z
     .object({
       customer: Conf.default("low"),
@@ -86,6 +106,7 @@ const ExtractedShape = z.object({
       scopeSummary: Conf.default("low"),
       targetClouds: Conf.default("low"),
       cloudRegions: Conf.default("low"),
+      projectType: Conf.default("low"),
     })
     .partial()
     .nullable()
@@ -97,6 +118,7 @@ const ExtractedShape = z.object({
       scopeSummary: v?.scopeSummary ?? "low",
       targetClouds: v?.targetClouds ?? "low",
       cloudRegions: v?.cloudRegions ?? "low",
+      projectType: v?.projectType ?? "low",
     })),
 });
 

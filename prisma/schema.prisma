@@ -183,6 +183,13 @@ model Project {
   primaryCloud    String?
   // Per-cloud regions: { azure: { primary, dr }, aws: { primary, dr }, gcp: { primary, dr } }
   cloudRegions    Json?
+  // AI-classified engagement type — drives the suggested deliverable flow
+  // (migration | greenfield | modernization | dr | poc | optimization | unknown)
+  projectType            String?
+  projectTypeConfidence  String?  // high | medium | low
+  projectTypeRationale   String?  // 1-2 sentence why
+  // Ordered list of deliverable types AI recommends for this engagement
+  suggestedDeliverables  String[] @default([])
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
