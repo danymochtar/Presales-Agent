@@ -8,6 +8,8 @@ import { GENERATE_ARCHITECTURE_SYSTEM } from "@/lib/prompts/generate-architectur
 import { recommendSkuForCloud } from "@/lib/inventory/sizing";
 import type { CloudType } from "@/lib/pricing";
 import type { Workload, WorkloadSet } from "@/lib/inventory/workload";
+import { logLlmCall } from "@/lib/ai-logging";
+import { findMatchingTemplates, formatTemplatesAsPromptSection } from "@/lib/templates";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -92,12 +94,22 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     })),
   };
 
+  const cloudProviderForTemplates = cloudParam === "compare" ? "compare" : cloudParam;
+  const templates = await findMatchingTemplates({
+    tenantId: project.tenantId,
+    deliverableType: "architecture",
+    cloud: cloudProviderForTemplates,
+    projectType: project.projectType,
+    maxCount: 2,
+  });
+  const templateSection = formatTemplatesAsPromptSection(templates);
+
   const userMessage = `# Generate Architecture document for project: ${project.name}
 
 mode: ${mode}
 clouds: [${cloudsInScope.join(", ")}]
 primaryCloud: ${project.primaryCloud ?? "(not yet decided)"}
-
+${templateSection ? `\n${templateSection}` : ""}
 ## Project
 - Customer: ${project.customer}
 - Industry: ${project.industry ?? "(not specified)"}
@@ -141,6 +153,7 @@ Generate the architecture document now in Markdown following the **${mode}** mod
 
   let fullText = "";
   const encoder = new TextEncoder();
+  const startTs = Date.now();
   const sse = new ReadableStream({
     async start(controller) {
       try {
@@ -168,15 +181,40 @@ Generate the architecture document now in Markdown following the **${mode}** mod
               clouds: cloudsInScope,
               workloadCount: workloadSet?.totals.count ?? 0,
               contextDocCount: contextDocs.length,
+              templateIds: templates.map((t) => t.id),
               generatedAt: new Date().toISOString(),
               model: DEFAULT_MODEL,
             } as object,
           },
         });
 
+        const usage = await result.usage.catch(() => null);
+        await logLlmCall({
+          tenantId: project.tenantId,
+          userId: session.user.id,
+          projectId: project.id,
+          deliverableId: saved.id,
+          purpose: "generate-architecture",
+          model: DEFAULT_MODEL,
+          inputTokens: usage?.inputTokens ?? 0,
+          outputTokens: usage?.outputTokens ?? 0,
+          durationMs: Date.now() - startTs,
+          succeeded: true,
+        });
+
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, deliverableId: saved.id, version, cloudProvider })}\n\n`));
         controller.close();
       } catch (err) {
+        await logLlmCall({
+          tenantId: project.tenantId,
+          userId: session.user.id,
+          projectId: project.id,
+          purpose: "generate-architecture",
+          model: DEFAULT_MODEL,
+          durationMs: Date.now() - startTs,
+          succeeded: false,
+          errorMessage: err instanceof Error ? err.message : String(err),
+        });
         controller.enqueue(
           encoder.encode(`data: ${JSON.stringify({ error: err instanceof Error ? err.message : "unknown error" })}\n\n`),
         );

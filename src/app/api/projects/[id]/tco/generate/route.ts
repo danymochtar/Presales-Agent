@@ -7,6 +7,8 @@ import { gateway, DEFAULT_MODEL } from "@/lib/ai";
 import { GENERATE_TCO_SYSTEM } from "@/lib/prompts/generate-tco";
 import { fxRateOrFallback } from "@/lib/pricing/fx";
 import type { CloudType } from "@/lib/pricing";
+import { logLlmCall } from "@/lib/ai-logging";
+import { findMatchingTemplates, formatTemplatesAsPromptSection } from "@/lib/templates";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -116,13 +118,23 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     bomBlocks.push(`### Compare BOM v${compareBom.version} (side-by-side)\n\`\`\`markdown\n${compareBom.contentMd.slice(0, 18_000)}\n\`\`\``);
   }
 
+  const cloudProviderForTemplates = cloudParam === "compare" ? "compare" : cloudParam;
+  const templates = await findMatchingTemplates({
+    tenantId: project.tenantId,
+    deliverableType: "tco",
+    cloud: cloudProviderForTemplates,
+    projectType: project.projectType,
+    maxCount: 2,
+  });
+  const templateSection = formatTemplatesAsPromptSection(templates);
+
   const userMessage = `# Generate TCO for project: ${project.name}
 
 mode: ${mode}
 clouds: [${cloudsInScope.join(", ")}]
 horizon: ${horizonYears} years
 default growth assumption: ${growthPct}% YoY (override if context docs state otherwise)
-
+${templateSection ? `\n${templateSection}` : ""}
 ## Project
 - Customer: ${project.customer}
 - Industry: ${project.industry ?? "(not specified)"}
@@ -161,6 +173,7 @@ Generate the TCO document now in Markdown following the **${mode}** mode structu
 
   let fullText = "";
   const encoder = new TextEncoder();
+  const startTs = Date.now();
   const sse = new ReadableStream({
     async start(controller) {
       try {
@@ -191,15 +204,40 @@ Generate the TCO document now in Markdown following the **${mode}** mode structu
               fxMyrPerUsd: fxRate,
               sourceBomIds: cloudsInScope.map((c) => bomByCloud[c]?.id).filter(Boolean),
               compareBomId: compareBom?.id ?? null,
+              templateIds: templates.map((t) => t.id),
               generatedAt: new Date().toISOString(),
               model: DEFAULT_MODEL,
             } as object,
           },
         });
 
+        const usage = await result.usage.catch(() => null);
+        await logLlmCall({
+          tenantId: project.tenantId,
+          userId: session.user.id,
+          projectId: project.id,
+          deliverableId: saved.id,
+          purpose: "generate-tco",
+          model: DEFAULT_MODEL,
+          inputTokens: usage?.inputTokens ?? 0,
+          outputTokens: usage?.outputTokens ?? 0,
+          durationMs: Date.now() - startTs,
+          succeeded: true,
+        });
+
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ done: true, deliverableId: saved.id, version, cloudProvider })}\n\n`));
         controller.close();
       } catch (err) {
+        await logLlmCall({
+          tenantId: project.tenantId,
+          userId: session.user.id,
+          projectId: project.id,
+          purpose: "generate-tco",
+          model: DEFAULT_MODEL,
+          durationMs: Date.now() - startTs,
+          succeeded: false,
+          errorMessage: err instanceof Error ? err.message : String(err),
+        });
         controller.enqueue(
           encoder.encode(`data: ${JSON.stringify({ error: err instanceof Error ? err.message : "unknown error" })}\n\n`),
         );

@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { gateway, DEFAULT_MODEL } from "@/lib/ai";
 import { PATTERN_EXTRACTOR_SYSTEM } from "@/lib/prompts/pattern-extractor";
+import { logLlmCall } from "@/lib/ai-logging";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -64,6 +65,7 @@ ${parsed.data.feedback}
 
 ${parsed.data.draftContent ? `# Draft being reviewed (for context)\n\`\`\`markdown\n${parsed.data.draftContent.slice(0, 6000)}\n\`\`\`` : ""}`;
 
+  const startTs = Date.now();
   try {
     const result = await generateObject({
       model: gateway(DEFAULT_MODEL),
@@ -78,8 +80,29 @@ ${parsed.data.draftContent ? `# Draft being reviewed (for context)\n\`\`\`markdo
       ],
       maxOutputTokens: 2000,
     });
+    await logLlmCall({
+      tenantId: project.tenantId,
+      userId: session.user.id,
+      projectId: project.id,
+      purpose: "extract-pattern",
+      model: DEFAULT_MODEL,
+      inputTokens: result.usage?.inputTokens ?? 0,
+      outputTokens: result.usage?.outputTokens ?? 0,
+      durationMs: Date.now() - startTs,
+      succeeded: true,
+    });
     return NextResponse.json(result.object);
   } catch (err) {
+    await logLlmCall({
+      tenantId: project.tenantId,
+      userId: session.user.id,
+      projectId: project.id,
+      purpose: "extract-pattern",
+      model: DEFAULT_MODEL,
+      durationMs: Date.now() - startTs,
+      succeeded: false,
+      errorMessage: err instanceof Error ? err.message : String(err),
+    });
     return NextResponse.json(
       { error: "extraction failed", detail: err instanceof Error ? err.message : String(err) },
       { status: 502 },

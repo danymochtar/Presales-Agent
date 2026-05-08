@@ -10,6 +10,7 @@ import { fxRateOrFallback, usdTo } from "@/lib/pricing/fx";
 import { recommendSkuForCloud } from "@/lib/inventory/sizing";
 import type { Workload, WorkloadSet } from "@/lib/inventory/workload";
 import { logLlmCall } from "@/lib/ai-logging";
+import { findMatchingTemplates, formatTemplatesAsPromptSection } from "@/lib/templates";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -119,11 +120,21 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   };
 
   const mode = cloudParam === "compare" ? "compare" : "single";
+  const cloudProviderForTemplates = cloudParam === "compare" ? "compare" : (cloudParam as string);
+  const templates = await findMatchingTemplates({
+    tenantId: project.tenantId,
+    deliverableType: "bom",
+    cloud: cloudProviderForTemplates,
+    projectType: project.projectType,
+    maxCount: 2,
+  });
+  const templateSection = formatTemplatesAsPromptSection(templates);
+
   const userMessage = `# Generate ${mode === "compare" ? "comparison" : "single-cloud"} BOM for project: ${project.name}
 
 mode: ${mode}
 clouds: [${cloudsToPrice.join(", ")}]
-
+${templateSection ? `\n${templateSection}` : ""}
 ## Project
 - Customer: ${project.customer}
 - Industry: ${project.industry ?? "(not specified)"}
@@ -194,6 +205,7 @@ Generate the BOM now in Markdown following the **${mode}-mode** structure. Apply
               fxMyrPerUsd: fxRate,
               priceSnapshot: pricingByCloud as object,
               workloadCount: workloadSet.totals.count,
+              templateIds: templates.map((t) => t.id),
               generatedAt: new Date().toISOString(),
               model: DEFAULT_MODEL,
             } as object,

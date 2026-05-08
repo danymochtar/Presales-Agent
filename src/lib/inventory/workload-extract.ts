@@ -52,6 +52,8 @@ const ExtractResult = z.object({
 export async function extractWorkloadsFromText(text: string, filename?: string): Promise<{
   workloadSet: WorkloadSet;
   warnings: string[];
+  usage: { inputTokens: number; outputTokens: number } | null;
+  model: string;
 }> {
   const trimmed = text.slice(0, 80_000); // cap input size
   const result = await generateObject({
@@ -88,5 +90,9 @@ export async function extractWorkloadsFromText(text: string, filename?: string):
       totals: summarize(workloads),
     },
     warnings: result.object.warnings,
+    usage: result.usage
+      ? { inputTokens: result.usage.inputTokens ?? 0, outputTokens: result.usage.outputTokens ?? 0 }
+      : null,
+    model: DEFAULT_MODEL,
   };
 }
