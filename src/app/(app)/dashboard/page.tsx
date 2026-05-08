@@ -266,7 +266,7 @@ export default async function DashboardPage() {
         <span>·</span>
         <span>Learned patterns: <Link href="/settings/patterns" className="underline">{patternCount} active</Link></span>
         <span>·</span>
-        <Link href="/services" className="underline">Cloud service comparison</Link>
+        <Link href="/services" className="underline">Services mapping</Link>
         <span>·</span>
         <Link href="/settings" className="underline">All settings</Link>
       </div>

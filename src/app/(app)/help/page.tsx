@@ -160,7 +160,7 @@ export default function HelpPage() {
             <li><strong>Default region:</strong> Malaysia West (Azure) + ap-southeast-5 (AWS). The dropdown lists the full SEA + APAC + US/EU catalog.</li>
             <li><strong>Run Customer Study first:</strong> downstream deliverables are more contextual when there&apos;s a fresh customer profile + IT landscape to reference.</li>
             <li><strong>Quick projects can be promoted:</strong> add more uploads or generate more deliverables on the same project to turn it into a full engagement — no need to start over.</li>
-            <li><strong>Stuck on naming?</strong> The <Link href="/services" className="underline">Services</Link> page lists Azure / AWS / GCP equivalents side-by-side across compute, storage, network, database, security, AI, analytics, and more.</li>
+            <li><strong>Stuck on naming?</strong> <Link href="/services" className="underline">Services mapping</Link> lists Azure / AWS / GCP equivalents side-by-side across compute, storage, network, database, security, AI, analytics, and more — with explicit gaps where a cloud has no first-party offering.</li>
           </ul>
         </CardContent>
       </Card>

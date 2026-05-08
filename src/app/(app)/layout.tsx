@@ -15,7 +15,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/dashboard", label: "Dashboard" },
     { href: "/projects", label: "Projects" },
     { href: "/quick", label: "Quick" },
-    { href: "/services", label: "Services" },
+    { href: "/services", label: "Services mapping" },
     { href: "/help", label: "Help" },
     { href: "/settings", label: "Settings" },
   ];
