@@ -20,7 +20,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   if (!project) notFound();
 
   const boms = project.deliverables.filter((d) => d.type === "bom");
+  const proposals = project.deliverables.filter((d) => d.type === "proposal");
   const latestInput = project.inputs[0];
+  const latestBom = boms[0];
 
   return (
     <div className="space-y-6">
@@ -30,8 +32,11 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           <p className="text-sm text-muted-foreground">{project.customer} · {project.industry ?? "—"} · {project.primaryRegion} → {project.drRegion}</p>
         </div>
         <div className="flex gap-2">
-          <Button asChild variant="outline" disabled={!latestInput}>
-            <Link href={latestInput ? `/projects/${project.id}/bom` : "#"}>Generate BOM</Link>
+          <Button asChild variant="outline">
+            <Link href={`/projects/${project.id}/bom`}>BOM</Link>
+          </Button>
+          <Button asChild variant={latestBom ? "outline" : "ghost"}>
+            <Link href={`/projects/${project.id}/proposal`}>Proposal</Link>
           </Button>
         </div>
       </div>
@@ -53,25 +58,49 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader><CardTitle>BOMs</CardTitle></CardHeader>
-        <CardContent>
-          {boms.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No BOM generated yet. {latestInput ? "Click Generate BOM above." : "Upload an inventory first."}</p>
-          ) : (
-            <ul className="divide-y text-sm">
-              {boms.map((b) => (
-                <li key={b.id} className="py-2 flex justify-between items-center">
-                  <Link href={`/projects/${project.id}/bom?v=${b.version}`} className="hover:underline">
-                    BOM v{b.version} <span className="text-muted-foreground">· {b.status}</span>
-                  </Link>
-                  <span className="text-xs text-muted-foreground">{new Date(b.createdAt).toLocaleString()}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader><CardTitle>BOMs ({boms.length})</CardTitle></CardHeader>
+          <CardContent>
+            {boms.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No BOM yet. {latestInput ? "Open BOM page to generate." : "Upload an inventory first."}</p>
+            ) : (
+              <ul className="divide-y text-sm">
+                {boms.map((b) => (
+                  <li key={b.id} className="py-2 flex justify-between items-center">
+                    <Link href={`/projects/${project.id}/bom?v=${b.version}`} className="hover:underline">
+                      v{b.version} <span className="text-muted-foreground">· {b.status}</span>
+                    </Link>
+                    <span className="text-xs text-muted-foreground">{new Date(b.createdAt).toLocaleString()}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Proposals ({proposals.length})</CardTitle></CardHeader>
+          <CardContent>
+            {proposals.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No proposal yet. {latestBom ? "Open Proposal page to generate." : "Generate a BOM first — proposal references it."}
+              </p>
+            ) : (
+              <ul className="divide-y text-sm">
+                {proposals.map((p) => (
+                  <li key={p.id} className="py-2 flex justify-between items-center">
+                    <Link href={`/projects/${project.id}/proposal?v=${p.version}`} className="hover:underline">
+                      v{p.version} <span className="text-muted-foreground">· {p.status}</span>
+                    </Link>
+                    <span className="text-xs text-muted-foreground">{new Date(p.createdAt).toLocaleString()}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

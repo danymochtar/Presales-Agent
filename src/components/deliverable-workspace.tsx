@@ -6,10 +6,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 type Version = { id: string; version: number; status: string; createdAt: string };
 
-export function BomWorkspace({
+export function DeliverableWorkspace({
   projectId,
   projectName,
-  hasInput,
+  deliverableType,
+  generatePath,
+  prerequisiteMessage,
+  canGenerate,
   versions,
   selectedContent,
   selectedVersion,
@@ -17,7 +20,10 @@ export function BomWorkspace({
 }: {
   projectId: string;
   projectName: string;
-  hasInput: boolean;
+  deliverableType: "bom" | "proposal" | "architecture" | "assessment" | "project_plan";
+  generatePath: string;
+  prerequisiteMessage: string | null;
+  canGenerate: boolean;
   versions: Version[];
   selectedContent: string | null;
   selectedVersion: number | null;
@@ -28,19 +34,26 @@ export function BomWorkspace({
   const [streamText, setStreamText] = useState<string>("");
   const [err, setErr] = useState<string | null>(null);
 
+  const labels: Record<string, string> = {
+    bom: "BOM",
+    proposal: "Proposal",
+    architecture: "Architecture",
+    assessment: "Assessment",
+    project_plan: "Project plan",
+  };
+  const label = labels[deliverableType] ?? deliverableType;
+
   async function generate() {
-    if (!hasInput) {
-      setErr("upload an inventory first");
+    if (!canGenerate) {
+      setErr(prerequisiteMessage ?? "prerequisites missing");
       return;
     }
     setStreaming(true);
     setStreamText("");
     setErr(null);
     try {
-      const res = await fetch(`/api/projects/${projectId}/bom/generate`, { method: "POST" });
-      if (!res.ok || !res.body) {
-        throw new Error(await res.text());
-      }
+      const res = await fetch(generatePath, { method: "POST" });
+      if (!res.ok || !res.body) throw new Error(await res.text());
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buf = "";
@@ -74,7 +87,7 @@ export function BomWorkspace({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">BOM — {projectName}</h1>
+          <h1 className="text-2xl font-semibold">{label} — {projectName}</h1>
           <p className="text-sm text-muted-foreground">
             {versions.length === 0 ? "No versions yet" : `Latest v${versions[0].version} · ${versions.length} version(s)`}
           </p>
@@ -85,9 +98,15 @@ export function BomWorkspace({
               <a href={`/api/deliverables/${selectedDeliverableId}/docx`}>Download .docx</a>
             </Button>
           )}
-          <Button onClick={generate} disabled={streaming || !hasInput}>{streaming ? "Generating..." : "Generate new version"}</Button>
+          <Button onClick={generate} disabled={streaming || !canGenerate}>
+            {streaming ? "Generating..." : "Generate new version"}
+          </Button>
         </div>
       </div>
+
+      {!canGenerate && prerequisiteMessage && (
+        <p className="text-sm text-muted-foreground border rounded p-3">{prerequisiteMessage}</p>
+      )}
 
       {err && <p className="text-sm text-destructive">{err}</p>}
 
@@ -120,7 +139,7 @@ export function BomWorkspace({
             {display ? (
               <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed">{display}</pre>
             ) : (
-              <p className="text-sm text-muted-foreground">Click "Generate new version" to draft a BOM.</p>
+              <p className="text-sm text-muted-foreground">Click "Generate new version" to draft a {label.toLowerCase()}.</p>
             )}
           </CardContent>
         </Card>
