@@ -76,9 +76,9 @@ const ProjectType = z.preprocess((v) => {
 const Stage = z.preprocess((v) => {
   if (typeof v !== "string") return undefined;
   const lower = v.toLowerCase().trim().replace(/_/g, "-");
-  if (["assessment", "architecture", "bom", "tco", "project-plan", "proposal"].includes(lower)) return lower;
+  if (["customer-study", "assessment", "architecture", "bom", "tco", "project-plan", "proposal", "sow", "ms-offering"].includes(lower)) return lower;
   return undefined;
-}, z.enum(["assessment", "architecture", "bom", "tco", "project-plan", "proposal"]));
+}, z.enum(["customer-study", "assessment", "architecture", "bom", "tco", "project-plan", "proposal", "sow", "ms-offering"]));
 
 // Schema enforced via generateObject — the AI SDK uses tool-calling under the
 // hood to make the model produce conforming JSON. Far more robust than parsing

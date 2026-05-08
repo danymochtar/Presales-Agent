@@ -8,7 +8,7 @@ type Template = {
   type: string;
   cloudProvider: string | null;
   projectType: string | null;
-  name: string;
+  name: string | null;
   description: string | null;
   originalName: string | null;
   textContent: string | null;
@@ -17,6 +17,7 @@ type Template = {
 };
 
 const TYPE_LABELS: Record<string, string> = {
+  customer_study: "Customer study",
   bom: "BOM",
   assessment: "Assessment",
   proposal: "Proposal",
@@ -89,7 +90,7 @@ export function TemplateList({ initial }: { initial: Template[] }) {
                 <li key={t.id} className={`p-3 flex items-start justify-between gap-2 ${t.status === "archived" ? "opacity-50" : ""}`}>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium">{t.name}</span>
+                      <span className="font-medium">{t.name ?? t.originalName ?? "Untitled template"}</span>
                       {filters.map((f) => (
                         <span key={f} className="text-[10px] uppercase rounded px-1.5 py-0.5 bg-accent">{f}</span>
                       ))}

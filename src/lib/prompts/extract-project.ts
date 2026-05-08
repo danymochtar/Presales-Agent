@@ -26,7 +26,7 @@ Return ONLY a JSON object matching this schema. No prose, no code fences.
   "constraints":      ["string"],
   "projectType": "migration" | "greenfield" | "modernization" | "dr" | "poc" | "optimization" | "unknown",
   "projectTypeRationale": "string — 1-2 sentence explanation pulling exact phrases from the docs",
-  "suggestedDeliverables": ["assessment" | "architecture" | "bom" | "tco" | "project-plan" | "proposal"],
+  "suggestedDeliverables": ["customer-study" | "assessment" | "architecture" | "bom" | "tco" | "project-plan" | "proposal" | "sow" | "ms-offering"],
   "confidence": {
     "customer":         "high" | "medium" | "low",
     "industry":         "high" | "medium" | "low",
@@ -50,15 +50,17 @@ Return ONLY a JSON object matching this schema. No prose, no code fences.
 
 # Suggested deliverables — pick by project type
 
-| Project type   | Suggested order                                                         |
-|----------------|-------------------------------------------------------------------------|
-| migration      | assessment → architecture → bom → tco → project-plan → proposal         |
-| greenfield     | architecture → bom → tco → project-plan → proposal                      |
-| modernization  | assessment → architecture → bom → project-plan → proposal               |
-| dr             | architecture → bom → project-plan → proposal                            |
-| poc            | architecture → bom → proposal                                            |
-| optimization   | assessment → bom → proposal                                              |
-| unknown        | assessment → architecture → bom → tco → project-plan → proposal         |
+| Project type   | Suggested order                                                                            |
+|----------------|--------------------------------------------------------------------------------------------|
+| migration      | customer-study → assessment → architecture → bom → tco → project-plan → proposal           |
+| greenfield     | customer-study → architecture → bom → tco → project-plan → proposal                        |
+| modernization  | customer-study → assessment → architecture → bom → project-plan → proposal                 |
+| dr             | customer-study → architecture → bom → project-plan → proposal                              |
+| poc            | customer-study → architecture → bom → proposal                                              |
+| optimization   | customer-study → assessment → bom → proposal                                                |
+| unknown        | customer-study → assessment → architecture → bom → tco → project-plan → proposal           |
+
+**Customer Study comes FIRST in every flow** — it gives the team a briefing on the customer profile + current IT landscape (system types like SAP / HRMS / ERP / banking core, applications, databases, identity, network, ops, security) BEFORE downstream technical deliverables. Optional add-ons SOW + ms-offering only when the engagement clearly calls for them.
 
 You MAY adjust this list based on customer-specific signals — e.g. if the docs explicitly say "no commercial proposal needed yet" drop "proposal"; if BFSI customer mandates 5-year TCO drop nothing. Default to the table above when uncertain.
 

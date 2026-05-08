@@ -28,7 +28,7 @@ export function DeliverableWorkspace({
   projectId: string;
   projectName: string;
   projectMode: "production" | "training";
-  deliverableType: "bom" | "proposal" | "architecture" | "assessment" | "project_plan" | "tco" | "sow" | "ms_offering";
+  deliverableType: "bom" | "proposal" | "architecture" | "assessment" | "project_plan" | "tco" | "sow" | "ms_offering" | "customer_study";
   generatePath: string;
   prerequisiteMessage: string | null;
   canGenerate: boolean;
@@ -46,6 +46,7 @@ export function DeliverableWorkspace({
   const [err, setErr] = useState<string | null>(null);
 
   const labels: Record<string, string> = {
+    customer_study: "Customer study",
     bom: "BOM",
     proposal: "Proposal",
     architecture: "Architecture",

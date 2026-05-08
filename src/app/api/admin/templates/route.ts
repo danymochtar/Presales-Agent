@@ -9,7 +9,7 @@ export const maxDuration = 30;
 
 const MAX_BYTES = 10 * 1024 * 1024;
 
-const TYPE_VALUES = ["bom", "assessment", "proposal", "architecture", "tco", "project_plan", "sow", "ms_offering", "letterhead", "other"] as const;
+const TYPE_VALUES = ["customer_study", "bom", "assessment", "proposal", "architecture", "tco", "project_plan", "sow", "ms_offering", "letterhead", "other"] as const;
 
 export async function GET() {
   const ctx = await requireSuperadmin();

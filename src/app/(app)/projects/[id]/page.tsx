@@ -43,6 +43,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   const projectPlans = byType("project_plan");
   const sows = byType("sow");
   const msOfferings = byType("ms_offering");
+  const customerStudies = byType("customer_study");
   const latestInput = project.inputs[0];
   const hasBom = boms.length > 0;
   const hasInput = !!latestInput;
@@ -51,6 +52,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   // Build map: cloud -> list of stage IDs with at least one version. Stage IDs
   // here use the kebab-case form ("project-plan") matching SmartWorkflow.
   const STAGE_FROM_TYPE: Record<string, string> = {
+    customer_study: "customer-study",
     assessment: "assessment",
     architecture: "architecture",
     bom: "bom",
@@ -61,11 +63,24 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     ms_offering: "ms-offering",
   };
   const existingByStage: Record<string, string[]> = {};
+  // Cloud-agnostic stages — apply to every cloud's existing-set
+  const CLOUD_AGNOSTIC_STAGES = new Set(["customer-study"]);
+  function ensureCloud(c: string) {
+    if (!existingByStage[c]) existingByStage[c] = [];
+  }
   for (const d of project.deliverables) {
     const stage = STAGE_FROM_TYPE[d.type];
     if (!stage) continue;
+    if (CLOUD_AGNOSTIC_STAGES.has(stage)) {
+      // applies to any cloud — add to all known target clouds + compare
+      for (const c of [...targetClouds, "compare"]) {
+        ensureCloud(c);
+        if (!existingByStage[c].includes(stage)) existingByStage[c].push(stage);
+      }
+      continue;
+    }
     const cloud = d.cloudProvider ?? "azure";
-    if (!existingByStage[cloud]) existingByStage[cloud] = [];
+    ensureCloud(cloud);
     if (!existingByStage[cloud].includes(stage)) existingByStage[cloud].push(stage);
   }
 
@@ -95,6 +110,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         </div>
         <div className="flex flex-wrap gap-2 items-center justify-end">
           <ProjectModeToggle projectId={project.id} initialMode={project.mode as "production" | "training"} />
+          <Button asChild variant="outline" size="sm"><Link href={`/projects/${project.id}/customer-study`}>Customer study</Link></Button>
           <Button asChild variant="outline" size="sm"><Link href={`/projects/${project.id}/assessment`}>Assessment</Link></Button>
           <Button asChild variant="outline" size="sm"><Link href={`/projects/${project.id}/architecture`}>Architecture</Link></Button>
           <Button asChild variant="outline" size="sm"><Link href={`/projects/${project.id}/bom`}>BOM</Link></Button>
@@ -161,11 +177,17 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <DeliverableCard
+          title="Customer study"
+          items={customerStudies}
+          basePath={`/projects/${project.id}/customer-study`}
+          emptyMsg="Pre-engagement briefing — customer profile + IT landscape"
+        />
+        <DeliverableCard
           title="Assessment"
           items={assessments}
           basePath={`/projects/${project.id}/assessment`}
           showCloud
-          emptyMsg={hasInput ? "Score per-workload readiness" : "Upload inventory first"}
+          emptyMsg={hasInput ? "Score full-stack readiness (infra/platform/app/DB)" : "Upload inventory first"}
         />
         <DeliverableCard
           title="Architecture"

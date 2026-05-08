@@ -3,9 +3,19 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
-type StageId = "assessment" | "architecture" | "bom" | "tco" | "project-plan" | "proposal" | "sow" | "ms-offering";
+type StageId =
+  | "customer-study"
+  | "assessment"
+  | "architecture"
+  | "bom"
+  | "tco"
+  | "project-plan"
+  | "proposal"
+  | "sow"
+  | "ms-offering";
 
 const STAGES: Record<StageId, { label: string; pathFor: (pid: string, cloud: string) => string }> = {
+  "customer-study": { label: "Customer study", pathFor: (p) => `/api/projects/${p}/customer-study/generate` },
   assessment:    { label: "Assessment",   pathFor: (p, c) => `/api/projects/${p}/assessment/generate?cloud=${c}` },
   architecture:  { label: "Architecture", pathFor: (p, c) => `/api/projects/${p}/architecture/generate?cloud=${c}` },
   bom:           { label: "BOM",          pathFor: (p, c) => `/api/projects/${p}/bom/generate?cloud=${c}` },
@@ -27,14 +37,17 @@ const PROJECT_TYPE_LABELS: Record<string, string> = {
 };
 
 // Fallback flow when AI didn't suggest one (e.g. legacy projects).
+// Customer Study comes FIRST in every flow — it primes everything downstream
+// with customer profile + current IT landscape (system types, applications,
+// databases, identity, network, ops, security).
 const DEFAULT_FLOWS: Record<string, StageId[]> = {
-  migration:     ["assessment", "architecture", "bom", "tco", "project-plan", "proposal"],
-  greenfield:    ["architecture", "bom", "tco", "project-plan", "proposal"],
-  modernization: ["assessment", "architecture", "bom", "project-plan", "proposal"],
-  dr:            ["architecture", "bom", "project-plan", "proposal"],
-  poc:           ["architecture", "bom", "proposal"],
-  optimization:  ["assessment", "bom", "proposal"],
-  unknown:       ["assessment", "architecture", "bom", "tco", "project-plan", "proposal"],
+  migration:     ["customer-study", "assessment", "architecture", "bom", "tco", "project-plan", "proposal"],
+  greenfield:    ["customer-study", "architecture", "bom", "tco", "project-plan", "proposal"],
+  modernization: ["customer-study", "assessment", "architecture", "bom", "project-plan", "proposal"],
+  dr:            ["customer-study", "architecture", "bom", "project-plan", "proposal"],
+  poc:           ["customer-study", "architecture", "bom", "proposal"],
+  optimization:  ["customer-study", "assessment", "bom", "proposal"],
+  unknown:       ["customer-study", "assessment", "architecture", "bom", "tco", "project-plan", "proposal"],
 };
 
 const CONFIDENCE_CHIP: Record<string, string> = {

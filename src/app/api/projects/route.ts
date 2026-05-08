@@ -16,7 +16,7 @@ const InputSeed = z.object({
 });
 
 const ProjectTypeEnum = z.enum(["migration", "greenfield", "modernization", "dr", "poc", "optimization", "unknown"]);
-const StageEnum = z.enum(["assessment", "architecture", "bom", "tco", "project-plan", "proposal"]);
+const StageEnum = z.enum(["customer-study", "assessment", "architecture", "bom", "tco", "project-plan", "proposal", "sow", "ms-offering"]);
 
 const CreateProject = z.object({
   name: z.string().min(2),

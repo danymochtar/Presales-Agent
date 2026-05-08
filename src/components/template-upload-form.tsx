@@ -6,12 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 const TYPES = [
-  { value: "bom",            label: "BOM" },
+  { value: "customer_study", label: "Customer study" },
   { value: "assessment",     label: "Assessment" },
-  { value: "proposal",       label: "Proposal" },
   { value: "architecture",   label: "Architecture" },
+  { value: "bom",            label: "BOM" },
   { value: "tco",            label: "TCO" },
   { value: "project_plan",   label: "Project plan" },
+  { value: "proposal",       label: "Proposal" },
   { value: "sow",            label: "SOW" },
   { value: "ms_offering",    label: "Managed services offering" },
   { value: "letterhead",     label: "Letterhead / brand" },

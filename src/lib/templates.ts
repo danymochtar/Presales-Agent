@@ -7,7 +7,7 @@ import { prisma } from "./prisma";
 
 export type TemplateMatch = {
   id: string;
-  name: string;
+  name: string | null;
   description: string | null;
   type: string;
   cloudProvider: string | null;
@@ -81,7 +81,7 @@ export function formatTemplatesAsPromptSection(
         ? t.textContent.slice(0, maxCharsPerTemplate) + "\n... [truncated]"
         : t.textContent;
     const desc = t.description ? `${t.description}\n` : "";
-    return `### House-style reference: "${t.name}"${filterTag}
+    return `### House-style reference: "${t.name ?? "(untitled)"}"${filterTag}
 ${desc}
 \`\`\`
 ${content}

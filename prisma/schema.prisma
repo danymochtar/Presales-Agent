@@ -145,8 +145,10 @@ model Template {
   // Optional filters — null means the template applies regardless.
   cloudProvider String?  // azure | aws | gcp | null
   projectType   String?  // migration | greenfield | modernization | dr | poc | optimization | null
-  // Human-readable name + free description.
-  name          String
+  // Human-readable name + free description. Nullable so existing rows from
+  // the pre-Phase-A schema migrate cleanly; UI falls back to originalName
+  // when name is null.
+  name          String?
   description   String?
   originalName  String?
   mimeType      String?
