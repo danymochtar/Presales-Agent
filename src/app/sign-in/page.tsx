@@ -41,8 +41,13 @@ export default function SignInPage() {
     <main className="flex min-h-screen items-center justify-center px-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>Presales Agent</CardTitle>
-          <CardDescription>{mode === "sign-in" ? "Sign in to continue." : "Create an internal account."}</CardDescription>
+          <div className="text-xs text-muted-foreground tracking-wider uppercase">Noventiq</div>
+          <CardTitle>Multicloud Agent</CardTitle>
+          <CardDescription>
+            {mode === "sign-in"
+              ? "Sign in to continue."
+              : "Create an internal account."}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={submit} className="space-y-4">

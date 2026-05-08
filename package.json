@@ -1,5 +1,5 @@
 {
-  "name": "presales-agent-web",
+  "name": "noventiq-multicloud-agent",
   "version": "0.1.0",
   "private": true,
   "scripts": {

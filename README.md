@@ -1,15 +1,42 @@
-# Presales Agent
+# Noventiq Multicloud Agent
 
-Self-provisioning agent for presales teams. Generates Azure deliverables (BOM first, more to come) from inventory inputs (RVTools / Azure Migrate) using live Azure Retail Prices and Claude via Vercel AI Gateway.
+Consultant-grade AI agent for cloud presales. Augments a senior presales head across the full multi-cloud presales lifecycle — Study → POC → Assessment → Design → Architecture → Costing → TCO → Project Plan → SOW → Proposal → Managed Services → Pipeline tracking.
 
-**Pilot market:** Malaysia. USD billing, MYR FX reference.
+**Pilot market:** Malaysia. USD billing, MYR FX reference. Single-user pilot.
 
-This repo contains two layers:
+## Lifecycle coverage (MVP-by-MVP roadmap)
 
-1. **Next.js web app at the repo root** — Vercel-deployable. The runnable product. See [DEPLOY.md](./DEPLOY.md).
-2. **Claude Code agent assets in `.claude/skills/`, `mcp-servers/`, `static-data-schema/`, `tenants/`** — used when running the agent locally via Claude Code (CLI). Not required for the web deployment, but kept here as the source-of-truth specs and for local power-user workflows.
+The agent ships incrementally — one MVP at a time — and each MVP delivers a complete, testable slice of value. Each row below maps to one deployable commit.
 
-## Quick start (web app)
+| # | MVP | Deliverable | Status |
+|---|---|---|---|
+| 1 | Foundation rebrand + multi-cloud schema | Project setup with cloud checkboxes | **shipping now** |
+| 2 | Multi-cloud Costing | BOM per cloud (Azure/AWS) + Compare mode | next |
+| 3 | Multi-cloud Assessment | Per-workload readiness scoring | |
+| 4 | Multi-cloud Architecture | Per-cloud landing zones + Mermaid | |
+| 5 | Multi-cloud Proposal | Cloud strategy + recommendation | |
+| 6 | TCO | Multi-year scenario analysis | |
+| 7 | Project Deployment Plan | Phased plan + Mermaid Gantt | |
+| 8 | SOW | Legal-grade scope, AC, change control | |
+| 9 | Managed Services Offering | Tier catalog + SLA grid | |
+| 10 | Customer Study / Briefing | Pre-meeting customer + market intel | |
+| 11 | POC / Exercise Plan | Time-boxed POC scope + exit gates | |
+| 12 | Pipeline Tracker | Opportunities + Activities (Excel I/O) | |
+| 13 | Branded DOCX | Noventiq letterhead + Mermaid → PNG | |
+
+Phase 14+ (future): knowledge base / win library, multi-tenant invite flow, CRM sync (HubSpot/Pipedrive/Salesforce), Microsoft Partner Center / AWS APN integration, GCP pricing client.
+
+## What's in MVP 1 (current commit)
+
+- Single-user auth (Better Auth, email + password)
+- Default tenant auto-bootstrapped with Malaysia + multi-cloud defaults (Azure Malaysia Central, AWS ap-southeast-5, GCP asia-southeast2 — GCP pricing deferred)
+- Multi-cloud project schema: `targetClouds[]`, `cloudRegions{}`, `customerSegment`, `primaryCloud`, `Deliverable.cloudProvider`
+- Project creation form with cloud-target multi-checkbox, customer segment dropdown, per-cloud primary/DR region fields
+- Project detail page shows cloud chips with primary star
+- Existing BOM / Architecture / Proposal continue to work as Azure-only single-cloud (multi-cloud BOM ships in MVP 2)
+- Existing settings UI (rate card, service catalog, learned patterns), training mode, DOCX export — unchanged
+
+## Quick start (local)
 
 ```bash
 cp .env.example .env
@@ -20,74 +47,53 @@ pnpm db:push
 pnpm dev          # http://localhost:3000
 ```
 
-Sign up → dashboard → create project → upload RVTools → click Generate BOM.
-
 ## Deploy to Vercel
 
-See [DEPLOY.md](./DEPLOY.md) for full instructions. TL;DR:
-
-1. Import repo in Vercel (no Root Directory setting needed — Next.js is at the root).
-2. Set 3 env vars: `DATABASE_URL`, `BETTER_AUTH_SECRET`, `AI_GATEWAY_API_KEY`.
-3. Deploy.
-4. Run `pnpm prisma db push` once against the prod URL to create tables.
-
-## What works in the MVP
-
-- Email + password auth (Better Auth)
-- Default tenant auto-created with Malaysia defaults (USD, FX MYR 4.7, Malaysia Central + SEA, seeded rate card + service catalog)
-- Project CRUD
-- RVTools `.xlsx` upload → parsed to normalized workload schema
-- Generate BOM (streamed): server fetches live Azure Retail prices in parallel, Claude composes the BOM Markdown, persists as a versioned `Deliverable`
-- Versioned BOMs (v1, v2, v3, …)
-- Read-only settings (rate card, service catalog, learned patterns)
+See [DEPLOY.md](./DEPLOY.md). Vercel build auto-runs `prisma db push --accept-data-loss` during deploy — schema migrations apply automatically.
 
 ## Stack
 
 - Next.js 15 App Router, React 19, TypeScript
 - Prisma + PostgreSQL
-- Better Auth (email + password)
+- Better Auth (email + password, single-user pilot)
 - Tailwind + shadcn/ui primitives
-- Vercel AI SDK (`ai`) + Vercel AI Gateway (`@ai-sdk/gateway`) — Anthropic models with prompt caching + streaming
-- `xlsx` for RVTools parsing
+- Vercel AI SDK (`ai`) + Vercel AI Gateway (`@ai-sdk/gateway`) — Anthropic Claude with prompt caching + streaming
+- `xlsx` for inventory parsing, `docx` + `marked` for DOCX export
 
 ## Repo layout
 
 ```
 .
-├── package.json               Next.js app
-├── next.config.ts
-├── tsconfig.json
-├── tailwind.config.ts
-├── prisma/schema.prisma       Database schema
+├── package.json
+├── prisma/schema.prisma
 ├── src/
 │   ├── app/
-│   │   ├── (app)/             Auth-gated: dashboard, projects, settings
-│   │   ├── api/               Better Auth + projects + BOM streaming + parser
+│   │   ├── api/                  Auth + project + deliverable streaming routes
+│   │   ├── (app)/                Auth-gated: dashboard, projects, settings
 │   │   └── sign-in/
-│   ├── components/            shadcn primitives + feature components
+│   ├── components/               shadcn primitives + feature components
 │   └── lib/
-│       ├── ai.ts              Vercel AI Gateway client
-│       ├── auth.ts            Better Auth server config
+│       ├── ai.ts                 Vercel AI Gateway client
+│       ├── auth.ts
 │       ├── prisma.ts
-│       ├── tenant.ts          Default tenant bootstrap + Malaysia seed
-│       ├── prompts/           BOM system prompt
-│       ├── pricing/           Azure Retail + FX
-│       └── inventory/         RVTools parser, sizing recommender
+│       ├── tenant.ts             Default tenant bootstrap (multi-cloud defaults)
+│       ├── prompts/              System prompts per deliverable
+│       ├── pricing/              Azure Retail (multi-cloud pricing comes in MVP 2)
+│       ├── inventory/            RVTools parser, sizing recommender
+│       └── render/               Markdown → DOCX
 │
-├── DEPLOY.md                  Full deployment + environment setup notes
+├── DEPLOY.md
 │
-├── .claude/skills/            Claude Code skills (legacy — used by the CLI agent)
-├── mcp-servers/               Python MCP servers (legacy CLI agent)
-├── static-data-schema/        Canonical tenant schema (reference)
-└── tenants/                   Local tenant data for the CLI agent
+├── .claude/skills/               Claude Code skills (legacy CLI agent)
+├── mcp-servers/                  Python MCP servers (legacy CLI agent)
+├── static-data-schema/           Canonical tenant schema (reference)
+└── tenants/                      Local tenant data for the CLI agent
 ```
-
-## Phases
-
-- **Phase 1 (current MVP)** — single-tenant, BOM only, read-only settings.
-- **Phase 2** — settings editing UI, training-project loop + pattern extractor, generate-proposal, DOCX export, Vercel Blob for templates.
-- **Phase 3** — multi-tenant, generate-architecture / assessment / project-plan, pipeline tracker, market-research MCP.
 
 ## Branch
 
 Active development: `claude/presales-agent-pilot-qDBpJ`
+
+## Trademark note
+
+"Noventiq" is the company name. This repository is private/internal pilot software; no public Noventiq trademark or branding asset is committed here. Update brand colors/letterhead in MVP 13 (Branded DOCX).

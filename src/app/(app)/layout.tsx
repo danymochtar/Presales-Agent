@@ -15,7 +15,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <header className="border-b">
         <div className="container flex items-center justify-between h-14">
           <div className="flex items-center gap-6">
-            <Link href="/dashboard" className="font-semibold">Presales Agent</Link>
+            <Link href="/dashboard" className="font-semibold">
+              Noventiq <span className="text-muted-foreground font-normal">Multicloud Agent</span>
+            </Link>
             <nav className="flex items-center gap-4 text-sm text-muted-foreground">
               <Link href="/dashboard" className="hover:text-foreground">Dashboard</Link>
               <Link href="/projects" className="hover:text-foreground">Projects</Link>

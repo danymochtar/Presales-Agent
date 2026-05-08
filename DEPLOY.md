@@ -1,4 +1,4 @@
-# Presales Agent — Web (MVP)
+# Noventiq Multicloud Agent — Deployment
 
 Vercel-deployable Next.js 15 app. Single-tenant for MVP. Generates Azure BOMs from RVTools inventory using live Azure Retail Prices and Anthropic Claude.
 

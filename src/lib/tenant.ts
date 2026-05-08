@@ -28,11 +28,18 @@ export async function ensureDefaultTenant(userId: string) {
         margin: { target_gross_margin_pct: 35, minimum_gross_margin_pct: 20 },
       },
       standards: {
-        primary_cloud: "Azure",
-        iac_preference: "Bicep",
-        default_region_primary: "Malaysia Central",
-        default_region_dr: "Southeast Asia",
-        security_baseline: "CIS Microsoft Azure Foundations Benchmark v2.0",
+        primary_clouds: ["Azure", "AWS"],
+        iac_preference: { azure: "Bicep", aws: "Terraform", gcp: "Terraform" },
+        default_regions: {
+          azure: { primary: "Malaysia Central", dr: "Southeast Asia" },
+          aws: { primary: "ap-southeast-5 (Malaysia)", dr: "ap-southeast-1 (Singapore)" },
+          gcp: { primary: "asia-southeast2 (Jakarta)", dr: "asia-southeast1 (Singapore)" },
+        },
+        security_baseline: {
+          azure: "CIS Microsoft Azure Foundations Benchmark v2.0",
+          aws: "CIS AWS Foundations Benchmark v3.0",
+          gcp: "CIS Google Cloud Platform Foundation Benchmark v3.0",
+        },
         required_tags: ["Environment", "Owner", "CostCenter", "Workload", "DataClassification"],
       },
       guardrails: {

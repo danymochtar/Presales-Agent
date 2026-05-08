@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Presales Agent",
-  description: "Presales agent for Azure deliverables (BOM, proposal, architecture).",
+  title: "Noventiq Multicloud Agent",
+  description:
+    "Consultant-grade AI assistant for cloud presales — BOM, architecture, proposal, assessment, TCO, project plan, SOW, and managed services across Azure, AWS, and GCP.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

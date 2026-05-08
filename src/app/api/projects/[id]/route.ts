@@ -4,13 +4,16 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+const CloudEnum = z.enum(["azure", "aws", "gcp"]);
 const Patch = z.object({
   name: z.string().min(2).optional(),
   customer: z.string().min(2).optional(),
   industry: z.string().optional().nullable(),
+  customerSegment: z.enum(["BFSI", "Gov", "MNC", "SMB"]).optional().nullable(),
   scopeSummary: z.string().optional().nullable(),
-  primaryRegion: z.string().optional(),
-  drRegion: z.string().optional(),
+  targetClouds: z.array(CloudEnum).min(1).optional(),
+  primaryCloud: CloudEnum.optional().nullable(),
+  cloudRegions: z.record(z.string(), z.object({ primary: z.string(), dr: z.string() })).optional(),
   stage: z.enum(["draft", "won", "lost", "pending", "graduated"]).optional(),
   mode: z.enum(["production", "training"]).optional(),
 });
@@ -41,6 +44,8 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   const body = await req.json();
   const parsed = Patch.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  const project = await prisma.project.update({ where: { id }, data: parsed.data });
+  const data: Record<string, unknown> = { ...parsed.data };
+  if (parsed.data.cloudRegions !== undefined) data.cloudRegions = parsed.data.cloudRegions as object;
+  const project = await prisma.project.update({ where: { id }, data });
   return NextResponse.json({ project });
 }

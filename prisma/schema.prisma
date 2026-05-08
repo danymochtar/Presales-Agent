@@ -161,19 +161,30 @@ model KnowledgeSample {
 
 // ---------- Projects ----------
 model Project {
-  id            String   @id @default(cuid())
-  tenantId      String
-  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  name          String
-  customer      String
-  industry      String?
-  stage         String   @default("draft") // draft | won | lost | pending | graduated
-  mode          String   @default("production") // production | training
-  scopeSummary  String?
-  primaryRegion String   @default("Malaysia Central")
-  drRegion      String   @default("Southeast Asia")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id              String   @id @default(cuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name            String
+  customer        String
+  industry        String?
+  customerSegment String?  // BFSI | Gov | MNC | SMB — drives compliance posture
+  stage           String   @default("draft")    // draft | won | lost | pending | graduated
+  mode            String   @default("production") // production | training
+  scopeSummary    String?
+  // Legacy single-cloud region fields — populated as a back-compat mirror of the
+  // primary cloud's primary region. Existing BOM/proposal/architecture routes
+  // still read these. Will be removed once all deliverable routes consume
+  // cloudRegions directly (MVP 2-5).
+  primaryRegion   String   @default("Malaysia Central")
+  drRegion        String   @default("Southeast Asia")
+  // Multi-cloud (added in MVP 1): clouds to evaluate (e.g. ["azure"], ["azure", "aws"])
+  targetClouds    String[] @default(["azure"])
+  // Optional: cloud chosen as the recommendation after assessment (Phase 2+)
+  primaryCloud    String?
+  // Per-cloud regions: { azure: { primary, dr }, aws: { primary, dr }, gcp: { primary, dr } }
+  cloudRegions    Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   inputs       ProjectInput[]
   deliverables Deliverable[]
@@ -196,17 +207,20 @@ model ProjectInput {
 }
 
 model Deliverable {
-  id          String   @id @default(cuid())
-  projectId   String
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  type        String   // bom | proposal | architecture | assessment | project_plan
-  version     Int      @default(1)
-  status      String   @default("draft") // draft | reviewed | final
-  contentMd   String   @db.Text
-  metadata    Json?    // pricing snapshot, fx used, region, etc.
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String   @id @default(cuid())
+  projectId     String
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type          String   // bom | proposal | architecture | assessment | project_plan
+  cloudProvider String?  // azure | aws | gcp | compare | multi (null for cloud-agnostic deliverables)
+  version       Int      @default(1)
+  status        String   @default("draft")  // draft | reviewed | final
+  contentMd     String   @db.Text
+  metadata      Json?    // pricing snapshot, fx used, regions, clouds compared, etc.
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
+  // MVP 1 keeps the legacy compound unique. MVP 2 (multi-cloud BOM) extends
+  // this to include cloudProvider so per-cloud versions can coexist.
   @@unique([projectId, type, version])
   @@index([projectId, type])
 }

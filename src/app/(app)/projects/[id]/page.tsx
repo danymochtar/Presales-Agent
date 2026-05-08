@@ -8,6 +8,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { UploadInputForm } from "@/components/upload-input-form";
 import { ProjectModeToggle } from "@/components/project-mode-toggle";
 
+const CLOUD_LABEL: Record<string, string> = {
+  azure: "Azure",
+  aws: "AWS",
+  gcp: "GCP",
+  compare: "Compare",
+  multi: "Multi",
+};
+
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await auth.api.getSession({ headers: await headers() });
@@ -21,26 +29,46 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   });
   if (!project) notFound();
 
-  const boms = project.deliverables.filter((d) => d.type === "bom");
-  const proposals = project.deliverables.filter((d) => d.type === "proposal");
-  const architectures = project.deliverables.filter((d) => d.type === "architecture");
+  const targetClouds = (project.targetClouds as string[]) ?? ["azure"];
+  const cloudRegions = (project.cloudRegions as Record<string, { primary: string; dr: string }> | null) ?? {};
+
+  const byType = (t: string) => project.deliverables.filter((d) => d.type === t);
+  const boms = byType("bom");
+  const proposals = byType("proposal");
+  const architectures = byType("architecture");
   const latestInput = project.inputs[0];
-  const latestBom = boms[0];
+  const hasBom = boms.length > 0;
+  const hasInput = !!latestInput;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">{project.name}</h1>
           <p className="text-sm text-muted-foreground">
-            {project.customer} · {project.industry ?? "—"} · {project.primaryRegion} → {project.drRegion} · stage: {project.stage}
+            {project.customer} · {project.industry ?? "—"}{project.customerSegment ? ` · ${project.customerSegment}` : ""} · stage: {project.stage}
           </p>
+          <div className="flex gap-1.5 mt-2 flex-wrap">
+            {targetClouds.map((c) => (
+              <span
+                key={c}
+                className={`text-xs rounded px-2 py-0.5 border ${
+                  project.primaryCloud === c ? "bg-primary text-primary-foreground border-primary" : "bg-accent text-foreground"
+                }`}
+                title={cloudRegions[c] ? `${cloudRegions[c].primary} → ${cloudRegions[c].dr}` : ""}
+              >
+                {CLOUD_LABEL[c] ?? c}
+                {cloudRegions[c] && <span className="opacity-70 ml-1">{cloudRegions[c].primary}</span>}
+                {project.primaryCloud === c && " ★"}
+              </span>
+            ))}
+          </div>
         </div>
-        <div className="flex gap-2 items-center">
+        <div className="flex flex-wrap gap-2 items-center justify-end">
           <ProjectModeToggle projectId={project.id} initialMode={project.mode as "production" | "training"} />
           <Button asChild variant="outline" size="sm"><Link href={`/projects/${project.id}/bom`}>BOM</Link></Button>
           <Button asChild variant="outline" size="sm"><Link href={`/projects/${project.id}/architecture`}>Architecture</Link></Button>
-          <Button asChild variant={latestBom ? "outline" : "ghost"} size="sm"><Link href={`/projects/${project.id}/proposal`}>Proposal</Link></Button>
+          <Button asChild variant={hasBom ? "outline" : "ghost"} size="sm"><Link href={`/projects/${project.id}/proposal`}>Proposal</Link></Button>
         </div>
       </div>
 
@@ -61,10 +89,25 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <DeliverableCard title="BOMs" items={boms} basePath={`/projects/${project.id}/bom`} emptyMsg={latestInput ? "Open BOM page to generate." : "Upload an inventory first."} />
-        <DeliverableCard title="Architectures" items={architectures} basePath={`/projects/${project.id}/architecture`} emptyMsg="Open Architecture page to generate." />
-        <DeliverableCard title="Proposals" items={proposals} basePath={`/projects/${project.id}/proposal`} emptyMsg={latestBom ? "Open Proposal page to generate." : "Generate a BOM first."} />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <DeliverableCard
+          title="BOM"
+          items={boms}
+          basePath={`/projects/${project.id}/bom`}
+          emptyMsg={hasInput ? "Generate BOM" : "Upload inventory first"}
+        />
+        <DeliverableCard
+          title="Architecture"
+          items={architectures}
+          basePath={`/projects/${project.id}/architecture`}
+          emptyMsg="Target-state architecture"
+        />
+        <DeliverableCard
+          title="Proposal"
+          items={proposals}
+          basePath={`/projects/${project.id}/proposal`}
+          emptyMsg={hasBom ? "Compose proposal from BOM" : "BOM first"}
+        />
       </div>
 
       {project.feedback.length > 0 && (
@@ -98,28 +141,42 @@ function DeliverableCard({
   items,
   basePath,
   emptyMsg,
+  showCloud,
 }: {
   title: string;
-  items: { id: string; version: number; status: string; createdAt: Date }[];
+  items: { id: string; version: number; status: string; cloudProvider: string | null; createdAt: Date }[];
   basePath: string;
   emptyMsg: string;
+  showCloud?: boolean;
 }) {
   return (
     <Card>
-      <CardHeader><CardTitle>{title} ({items.length})</CardTitle></CardHeader>
+      <CardHeader><CardTitle className="text-base">{title} ({items.length})</CardTitle></CardHeader>
       <CardContent>
         {items.length === 0 ? (
           <p className="text-sm text-muted-foreground">{emptyMsg}</p>
         ) : (
           <ul className="divide-y text-sm">
-            {items.map((d) => (
-              <li key={d.id} className="py-2 flex justify-between items-center">
-                <Link href={`${basePath}?v=${d.version}`} className="hover:underline">
-                  v{d.version} <span className="text-muted-foreground">· {d.status}</span>
-                </Link>
-                <span className="text-xs text-muted-foreground">{new Date(d.createdAt).toLocaleString()}</span>
+            {items.slice(0, 5).map((d) => {
+              const cloud = d.cloudProvider ?? "default";
+              const cloudParam = showCloud && cloud !== "default" && cloud !== "multi" ? `?v=${d.version}&cloud=${cloud}` : `?v=${d.version}`;
+              return (
+                <li key={d.id} className="py-2 flex justify-between items-center gap-2">
+                  <Link href={`${basePath}${cloudParam}`} className="hover:underline truncate">
+                    {showCloud && cloud !== "default" && (
+                      <span className="text-xs bg-accent rounded px-1.5 py-0.5 mr-1.5">{CLOUD_LABEL[cloud] ?? cloud}</span>
+                    )}
+                    v{d.version} <span className="text-muted-foreground text-xs">· {d.status}</span>
+                  </Link>
+                  <span className="text-xs text-muted-foreground shrink-0">{new Date(d.createdAt).toLocaleDateString()}</span>
+                </li>
+              );
+            })}
+            {items.length > 5 && (
+              <li className="py-2 text-xs text-muted-foreground">
+                <Link href={basePath} className="underline">+{items.length - 5} more</Link>
               </li>
-            ))}
+            )}
           </ul>
         )}
       </CardContent>
