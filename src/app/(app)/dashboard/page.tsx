@@ -107,9 +107,45 @@ export default async function DashboardPage() {
             {tenant.fxMyrPerUsd ? ` · FX MYR/USD ${tenant.fxMyrPerUsd}` : ""}
           </p>
         </div>
-        <Button asChild size="lg">
-          <Link href="/projects/new">+ New project</Link>
-        </Button>
+      </div>
+
+      {/* Entry-point chooser — full pipeline vs single deliverable */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <Link
+          href="/projects/new"
+          className="rounded-lg border bg-card p-4 hover:border-primary hover:shadow-sm transition group"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <div className="text-xs uppercase tracking-wider text-muted-foreground">Full project</div>
+              <div className="text-base font-semibold mt-0.5 group-hover:text-primary">Start a new engagement →</div>
+            </div>
+            <span className="text-2xl leading-none text-muted-foreground group-hover:text-primary">⇉</span>
+          </div>
+          <p className="text-sm text-muted-foreground mt-2">
+            Drop any customer docs (RVTools, Azure Migrate, RFP, meeting notes). The agent classifies the
+            engagement and walks you through the recommended deliverable flow.
+          </p>
+          <p className="text-xs text-muted-foreground mt-2">Use when: end-to-end study → BOM → proposal → SOW.</p>
+        </Link>
+
+        <Link
+          href="/quick"
+          className="rounded-lg border bg-card p-4 hover:border-primary hover:shadow-sm transition group"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <div className="text-xs uppercase tracking-wider text-muted-foreground">Quick generate</div>
+              <div className="text-base font-semibold mt-0.5 group-hover:text-primary">One document, just the prereqs →</div>
+            </div>
+            <span className="text-2xl leading-none text-muted-foreground group-hover:text-primary">⚡</span>
+          </div>
+          <p className="text-sm text-muted-foreground mt-2">
+            Pick a single deliverable (BOM, Architecture, SOW…) and supply only what it actually needs.
+            No full project scaffolding.
+          </p>
+          <p className="text-xs text-muted-foreground mt-2">Use when: standalone BOM from inventory, SOW from existing scope, etc.</p>
+        </Link>
       </div>
 
       {/* KPI cards */}
