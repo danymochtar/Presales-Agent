@@ -283,6 +283,37 @@ export function QuickGenerateWizard() {
           </div>
         )}
 
+        {kind === "customer-study" && (
+          <div className="space-y-2">
+            <Label htmlFor="study-files">Or attach documents (optional)</Label>
+            <p className="text-xs text-muted-foreground">
+              RFP / RFQ, meeting minutes, customer architecture diagrams, public annual report, regulator findings —
+              anything that can sharpen the briefing. .xlsx, .docx, .pdf, .txt, .md, .csv. 10MB per file.
+            </p>
+            <input
+              id="study-files"
+              type="file"
+              multiple
+              accept=".xlsx,.xls,.docx,.pdf,.txt,.md,.csv"
+              onChange={(e) => uploadFiles(e.target.files)}
+              disabled={uploading}
+              className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-1.5 file:text-sm file:font-medium hover:file:bg-secondary/80"
+            />
+            {uploading && <p className="text-xs text-muted-foreground">Parsing…</p>}
+            {parsedFiles.length > 0 && (
+              <ul className="space-y-1 mt-1">
+                {parsedFiles.map((f, i) => (
+                  <li key={i} className="text-xs flex items-center gap-2 border rounded p-2">
+                    <span className="bg-accent rounded px-1.5 py-0.5">{f.kind}</span>
+                    <span className="font-medium truncate flex-1">{f.filename}</span>
+                    <span className="text-muted-foreground">{f.rawSummary}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
         {combinedNeeds.inventory && (
           <div className="space-y-2">
             <Label htmlFor="file">
