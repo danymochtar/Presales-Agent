@@ -49,6 +49,9 @@ export type Prereqs = {
     purchaseModel: boolean;
     onPremBaseline: boolean;
   };
+  // Subset of fields shown in the form but NOT required to submit. Empty
+  // (or omitted) = every shown field is required.
+  optionalFields?: (keyof Prereqs["needs"])[];
   recommendedUpstream: DeliverableKind[];
   hardUpstream: DeliverableKind[];
 };
@@ -115,9 +118,12 @@ export const DELIVERABLE_PREREQS: Record<DeliverableKind, Prereqs> = {
   "customer-study": {
     kind: "customer-study",
     label: "Customer study",
-    shortDesc: "Pre-meeting briefing on customer profile, IT landscape, regulatory context.",
+    shortDesc: "Pre-meeting briefing on customer profile, IT landscape, regulatory context, plus suggested Noventiq use cases.",
     group: "discover",
-    needs: { customer: true, scope: false, inventory: false, clouds: false, regions: false, purchaseModel: false, onPremBaseline: false },
+    needs: { customer: true, scope: true, inventory: false, clouds: false, regions: false, purchaseModel: false, onPremBaseline: false },
+    // All inputs optional — the agent will research from training data and
+    // propose generic industry use cases when nothing is supplied.
+    optionalFields: ["customer", "scope"],
     recommendedUpstream: [],
     hardUpstream: [],
   },

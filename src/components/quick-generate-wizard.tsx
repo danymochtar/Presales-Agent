@@ -60,6 +60,14 @@ export function QuickGenerateWizard() {
     return merged;
   }, [stagesToRun]);
 
+  // A field is required only if every stage that needs it lists it as
+  // required (not in optionalFields). Single-stage Quick flows are the
+  // common case — a field is optional iff that stage marks it optional.
+  const isOptional = (k: keyof typeof combinedNeeds): boolean => stagesToRun.every((s) => {
+    const p = DELIVERABLE_PREREQS[s];
+    return !p.needs[k] || (p.optionalFields ?? []).includes(k);
+  });
+
   const grouped = useMemo(() => {
     const out: Record<Group, DeliverableKind[]> = { discover: [], design: [], commercial: [], delivery: [] };
     for (const k of DELIVERABLES_IN_LIFECYCLE_ORDER) out[DELIVERABLE_PREREQS[k].group].push(k);
@@ -94,13 +102,13 @@ export function QuickGenerateWizard() {
 
   function validate(): string | null {
     if (!kind || !prereqs) return "pick a deliverable first";
-    if (combinedNeeds.customer && !customer.trim()) return "customer is required";
-    if (combinedNeeds.scope && !scope.trim()) return "scope summary is required";
-    if (combinedNeeds.inventory) {
+    if (combinedNeeds.customer && !isOptional("customer") && !customer.trim()) return "customer is required";
+    if (combinedNeeds.scope && !isOptional("scope") && !scope.trim()) return "scope summary is required";
+    if (combinedNeeds.inventory && !isOptional("inventory")) {
       const hasWorkloads = parsedFiles.some((f) => f.workloads && f.workloads.workloads.length > 0);
       if (!hasWorkloads) return "upload an inventory (RVTools / Azure Migrate / CSV) — needed to size workloads";
     }
-    if (combinedNeeds.clouds && targetClouds.length === 0) return "pick at least one target cloud";
+    if (combinedNeeds.clouds && !isOptional("clouds") && targetClouds.length === 0) return "pick at least one target cloud";
     return null;
   }
 
@@ -125,12 +133,18 @@ export function QuickGenerateWizard() {
         ? cloudRegions
         : { azure: { ...MARKET_DEFAULT_REGIONS.azure } };
 
+      const trimmedCustomer = customer.trim();
+      const customerForApi = trimmedCustomer
+        || (kind === "customer-study"
+          ? `(industry pattern${industry ? `: ${industry}` : ""})`
+          : "(quick)");
+
       const createRes = await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: `Quick: ${prereqs.label} · ${new Date().toLocaleDateString()}`,
-          customer: customer || "(quick)",
+          customer: customerForApi,
           industry: industry || undefined,
           scopeSummary: scope || onPremBaseline || undefined,
           targetClouds: cloudsForProject,
@@ -239,7 +253,9 @@ export function QuickGenerateWizard() {
         {combinedNeeds.customer && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="customer">Customer <span className="text-destructive">*</span></Label>
+              <Label htmlFor="customer">
+                Customer{!isOptional("customer") && <span className="text-destructive ml-0.5">*</span>}
+              </Label>
               <Input id="customer" value={customer} onChange={(e) => setCustomer(e.target.value)} placeholder="e.g. Acme Bank Berhad" />
             </div>
             <div className="space-y-1.5">
@@ -251,20 +267,27 @@ export function QuickGenerateWizard() {
 
         {combinedNeeds.scope && (
           <div className="space-y-1.5">
-            <Label htmlFor="scope">Scope summary <span className="text-destructive">*</span></Label>
+            <Label htmlFor="scope">
+              {kind === "customer-study" ? "What we already know (optional notes)" : "Scope summary"}
+              {!isOptional("scope") && <span className="text-destructive ml-0.5">*</span>}
+            </Label>
             <textarea
               id="scope"
               value={scope}
               onChange={(e) => setScope(e.target.value)}
               className="w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm"
-              placeholder="1-2 sentences on what this engagement is about."
+              placeholder={kind === "customer-study"
+                ? "Anything you've heard about this customer — recent news, contacts, current footprint, regulator findings. Leave blank to let the agent research from scratch."
+                : "1-2 sentences on what this engagement is about."}
             />
           </div>
         )}
 
         {combinedNeeds.inventory && (
           <div className="space-y-2">
-            <Label htmlFor="file">Inventory <span className="text-destructive">*</span></Label>
+            <Label htmlFor="file">
+              Inventory{!isOptional("inventory") && <span className="text-destructive ml-0.5">*</span>}
+            </Label>
             <p className="text-xs text-muted-foreground">RVTools / Azure Migrate Excel, generic CSV, or a workload list.</p>
             <input
               id="file"

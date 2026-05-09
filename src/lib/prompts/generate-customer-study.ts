@@ -13,6 +13,7 @@ The Customer Study is NOT a sales pitch. It is an internal briefing — honest a
 
 # Hard rules
 - Work from project metadata + uploaded customer documents (RFP, requirements, meeting notes, customer-provided architecture diagrams) ONLY. Do NOT invent facts about the customer (no fake revenue figures, no fake leadership names, no made-up M&A history).
+- If the customer name is missing OR matches "(industry pattern…)" (e.g. "(industry pattern: Banking)"), treat this as **research/industry mode**: produce an industry-pattern briefing (e.g. "Typical Malaysian tier-2 bank") rather than fabricating one. Clearly label sections "industry pattern" instead of customer-specific. Skip Sections 4 (Stakeholders) and 5 (Procurement) — they require a real customer.
 - When data is missing, FLAG IT explicitly under "Discovery questions" — better to say "to confirm: which HRMS vendor" than fabricate.
 - For Malaysian context, use Malaysian English (en-MY).
 - For BFSI/Gov customers, surface BNM RMiT / PDPA / sector regulator intel up front.
@@ -135,8 +136,20 @@ List 8-15 discovery questions to ask the customer to fill the gaps in this study
 - "Confirm BNM RMiT readiness assessment status — last conducted when?"
 - "Disclose typical procurement cycle and FY end."
 
-## 10. Key takeaways
-3-5 sentences summarizing the customer in a way that primes the team for a productive first meeting.
+## 10. Potential solutions Noventiq can deliver
+List 4-7 high-fit use cases the team should pitch, mapped to specific Noventiq Multicloud Agent offerings. For each use case provide:
+- **Use case** (1 line, customer-relevant business outcome)
+- **Trigger** — the signal in this customer's profile / IT landscape that makes it a fit (e.g. "Windows Server 2012 EOL on 100+ VMs", "MyDigitalID mandate for Gov customers", "BNM RMiT 2024 for tier-1 banks", "SAP ECC EOL Dec 2027")
+- **Recommended Noventiq deliverables** (pick from: Customer Study, Assessment, Architecture, BOM, TCO, Project Plan, Proposal, SOW, Managed Services Offering)
+- **Cloud target** (Azure / AWS / GCP / multi-cloud / hybrid — match to customer constraints)
+- **Indicative scope size** (small / medium / large — only a hint, real numbers come from BOM)
+
+Be honest: not every use case is a fit for every customer. Limit to 4-7. Order by impact × likelihood. Cover at least one of each: migration, modernization, security/compliance, cost optimization, managed services. If the customer is BFSI/Gov, lead with compliance (BNM RMiT / PDPA / MAMPU). If the customer hints at SAP/Oracle/banking core, surface a workload-specific use case.
+
+When customer name is unknown (research mode), generalize to the industry (e.g. "for a typical Malaysian tier-2 bank…") and clearly label these as **industry-pattern** use cases rather than customer-specific.
+
+## 11. Key takeaways
+3-5 sentences summarizing the customer in a way that primes the team for a productive first meeting. End with the single highest-confidence use case from Section 10.
 
 # Style
 - Concise. This is a 2-4 page briefing, not a 20-page report.
