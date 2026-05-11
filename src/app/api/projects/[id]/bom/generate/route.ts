@@ -13,6 +13,7 @@ import { recommendSkuForCloud } from "@/lib/inventory/sizing";
 import type { Workload, WorkloadSet } from "@/lib/inventory/workload";
 import { logLlmCall } from "@/lib/ai-logging";
 import { findMatchingTemplates, formatTemplatesAsPromptSection } from "@/lib/templates";
+import { classifyWorkload, WORKLOAD_TYPE_LABELS } from "@/lib/inventory/workload-classifier";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -43,16 +44,31 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     where: { id, tenant: { users: { some: { id: session.user.id } } } },
     include: {
       tenant: { include: { patterns: { where: { active: true, deliverableType: "bom" } } } },
-      inputs: { orderBy: { createdAt: "desc" }, take: 1 },
+      inputs: { orderBy: { createdAt: "desc" } },
     },
   });
   if (!project) return new Response("not found", { status: 404 });
   if (!project.tenant) return new Response("tenant missing", { status: 400 });
 
-  const latest = project.inputs[0];
-  const workloadSet = (latest?.workloadsJson as unknown as WorkloadSet | null) ?? null;
-  if (!workloadSet || workloadSet.workloads.length === 0) {
-    return new Response("no workloads — upload an inventory first", { status: 400 });
+  const latestWithWorkloads = project.inputs.find((i) => i.workloadsJson);
+  const workloadSet = (latestWithWorkloads?.workloadsJson as unknown as WorkloadSet | null) ?? null;
+
+  // Classify-then-price: cheap Haiku pass on the supplied artifacts decides
+  // which output structure the BOM prompt produces (vm / siem / ai / data /
+  // app_mod / mixed). Only vm_inventory + app_modernization + mixed REQUIRE
+  // a sized workload set; the other types price from document text alone.
+  const profile = await classifyWorkload({
+    filenames: project.inputs.map((i) => i.filename ?? "(unnamed)"),
+    summaries: project.inputs.map((i) => i.rawSummary ?? ""),
+    textSnippets: project.inputs.map((i) => i.textContent ?? ""),
+    workloadRowCount: workloadSet?.workloads.length ?? 0,
+  });
+
+  if (profile.needsVmSizing && (!workloadSet || workloadSet.workloads.length === 0)) {
+    return new Response(
+      `Workload type "${WORKLOAD_TYPE_LABELS[profile.primaryType]}" needs a sized inventory. Upload an RVTools / Azure Migrate / CSV file or fill the workload table in the mapping review step.`,
+      { status: 400 },
+    );
   }
 
   const targetClouds = (project.targetClouds ?? ["azure"]) as CloudType[];
@@ -78,10 +94,19 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const cloudEntries = await Promise.all(cloudsToPrice.map(async (cloud) => {
     const labelPrimary = cloudRegions[cloud]?.primary;
     const region = pricingRegion(cloud, labelPrimary);
-    const sizedWorkloads: Workload[] = workloadSet.workloads.map((w) => ({
-      ...w,
-      recommendedSku: recommendSkuForCloud(cloud, w.cpu, w.ramGb),
-    }));
+
+    // Non-VM workload profiles (siem / ai / data) skip the IaaS sizing and
+    // batched VM pricing — those would be empty anyway. The LLM prices the
+    // workload-type-specific services (Log Analytics / Sentinel / Azure
+    // OpenAI tokens / Fabric capacity) from its training data + the
+    // workload profile block in the user message. VM-specific pricing
+    // helpers light up only when sized workloads are present.
+    const sizedWorkloads: Workload[] = workloadSet
+      ? workloadSet.workloads.map((w) => ({
+          ...w,
+          recommendedSku: recommendSkuForCloud(cloud, w.cpu, w.ramGb),
+        }))
+      : [];
 
     const linuxSkus = [...new Set(sizedWorkloads.filter((w) => w.os === "linux" || w.os === "other").map((w) => w.recommendedSku!))];
     const winSkus = [...new Set(sizedWorkloads.filter((w) => w.os === "windows").map((w) => w.recommendedSku!))];
@@ -91,8 +116,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       winSkus.length ? batchPriceCompute(cloud, winSkus, region, "windows", purchaseModel) : Promise.resolve({}),
     ]);
 
-    // Estimate the PAYG monthly compute baseline so the licensing module can
-    // compute % savings deterministically (avoids the LLM guessing AHB math).
     const baseMonthly = sizedWorkloads.reduce((sum, w) => {
       const sku = w.recommendedSku;
       if (!sku) return sum;
@@ -101,7 +124,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       if (r && r.found) return sum + (r.monthlyUsd ?? 0) * w.count;
       return sum;
     }, 0);
-    const licensing = licensingScenario(cloud, { ...workloadSet, workloads: sizedWorkloads }, baseMonthly);
+    const licensing = workloadSet
+      ? licensingScenario(cloud, { ...workloadSet, workloads: sizedWorkloads }, baseMonthly)
+      : null;
 
     return [cloud, {
       regionLabel: labelPrimary ?? PRICING_REGION_DEFAULTS[cloud].primary,
@@ -148,6 +173,21 @@ mode: ${mode}
 clouds: [${cloudsToPrice.join(", ")}]
 purchase model: ${PURCHASE_MODEL_LABELS[purchaseModel]} (${purchaseModel})
 ${templateSection ? `\n${templateSection}` : ""}
+
+## Workload profile (classify-then-price — drives output structure)
+\`\`\`json
+${JSON.stringify({
+  primaryType: profile.primaryType,
+  primaryLabel: WORKLOAD_TYPE_LABELS[profile.primaryType],
+  secondaryTypes: profile.secondaryTypes,
+  rationale: profile.rationale,
+  confidence: profile.confidence,
+  needsVmSizing: profile.needsVmSizing,
+  sources: profile.sources,
+}, null, 2)}
+\`\`\`
+Match the output structure to \`primaryType\` per the system prompt. State the detected type + rationale in Section 1 (Executive summary).
+
 ## Project
 - Customer: ${project.customer}
 - Industry: ${project.industry ?? "(not specified)"}
@@ -159,8 +199,12 @@ ${templateSection ? `\n${templateSection}` : ""}
 ${JSON.stringify(tenantContext, null, 2)}
 \`\`\`
 
-## Workload inventory
-Total: ${workloadSet.totals.count} workloads, ${workloadSet.totals.cpu} vCPU, ${workloadSet.totals.ramGb} GB RAM, ${workloadSet.totals.storageGb} GB storage. OS mix: ${JSON.stringify(workloadSet.totals.osMix)}.
+${workloadSet ? `## Workload inventory
+Total: ${workloadSet.totals.count} workloads, ${workloadSet.totals.cpu} vCPU, ${workloadSet.totals.ramGb} GB RAM, ${workloadSet.totals.storageGb} GB storage. OS mix: ${JSON.stringify(workloadSet.totals.osMix)}.` : `## Workload inventory
+_No structured workload set parsed — this is expected for ${WORKLOAD_TYPE_LABELS[profile.primaryType]} profiles. Build Section 2 (Ingestion / Model usage / Capacity profile) from the text content in the project inputs below._`}
+
+${project.inputs.length > 0 ? `## Uploaded artifacts (text content for non-VM extraction)
+${project.inputs.map((i) => `### ${i.filename ?? "(unnamed)"} — ${i.kind}\n${i.rawSummary ?? ""}\n${i.textContent ? "\`\`\`\n" + i.textContent.slice(0, 12_000) + "\n\`\`\`" : "(no text content)"}`).join("\n\n---\n\n")}` : ""}
 
 ## Per-cloud sized workloads + live prices
 \`\`\`json
@@ -217,12 +261,13 @@ Generate the BOM now in Markdown following the **${mode}-mode** structure. Apply
               clouds: cloudsToPrice,
               fxMyrPerUsd: fxRate,
               priceSnapshot: pricingByCloud as object,
-              workloadCount: workloadSet.totals.count,
+              workloadCount: workloadSet?.totals.count ?? 0,
+              workloadProfile: profile,
               monthlyComputeBaselineUsdByCloud: Object.fromEntries(
                 Object.entries(pricingByCloud).map(([c, v]) => {
                   const lic = (v as { licensing?: { workloadCounts?: unknown } }).licensing;
                   // baseMonthly was passed into licensingScenario; recompute from sized workloads.
-                  const sized = (v as { sizedWorkloads: typeof workloadSet.workloads }).sizedWorkloads;
+                  const sized = (v as { sizedWorkloads: Workload[] }).sizedWorkloads;
                   const linuxTbl = (v as { prices: { linux: Record<string, ComputeQuoteResult> } }).prices.linux;
                   const winTbl = (v as { prices: { windows: Record<string, ComputeQuoteResult> } }).prices.windows;
                   const monthly = sized.reduce((s, w) => {

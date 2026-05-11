@@ -112,14 +112,23 @@ export function WorkloadReview({
             )}
             <li><strong>Add workloads manually</strong> below — minimum is CPU + RAM per row.</li>
             <li><strong>Upload another file</strong> using the box at the bottom.</li>
+            <li>
+              <strong>Not a VM inventory?</strong> If your upload is a SIEM design / AI use case /
+              data platform spec / app modernization plan, skip the workload table — the BOM
+              generator will classify the artifact and price the relevant services from the
+              document text instead.
+            </li>
           </ul>
-          {onAiExtract && (
-            <div>
+          <div className="flex flex-wrap gap-2">
+            {onAiExtract && (
               <Button size="sm" onClick={runAiExtract} disabled={aiBusy}>
                 {aiBusy ? "Extracting…" : "Try AI extraction from uploaded text"}
               </Button>
-            </div>
-          )}
+            )}
+            <Button size="sm" variant="outline" onClick={() => onContinue(set)}>
+              Skip table — not a VM inventory →
+            </Button>
+          </div>
           {aiErr && <p className="text-xs text-destructive">{aiErr}</p>}
         </div>
       )}
