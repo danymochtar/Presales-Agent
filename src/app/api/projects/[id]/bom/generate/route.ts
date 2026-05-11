@@ -203,6 +203,13 @@ ${JSON.stringify({
 \`\`\`
 Match the output structure to \`primaryType\` per the system prompt. State the detected type + rationale in Section 1 (Executive summary).
 
+${project.solutionArea ? `## Solution area (user-confirmed engagement classification)
+\`\`\`json
+${JSON.stringify({ solutionArea: project.solutionArea })}
+\`\`\`
+State the solution area in Section 1 alongside the workload profile. The classification is the user's final call — do not override it.
+` : ""}
+
 ## Migration strategy
 \`\`\`json
 ${JSON.stringify({

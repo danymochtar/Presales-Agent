@@ -205,6 +205,10 @@ model Project {
   // lift_and_shift | hybrid | modernization — drives PaaS routing in the BOM
   // generator. Non-modernizable workloads stay on IaaS regardless of strategy.
   migrationStrategy String @default("lift_and_shift")
+  // Solution area classification from the AI assessor (one of the values in
+  // src/lib/inventory/solution-area.ts). Null until the user runs the
+  // assessment or picks an override.
+  solutionArea      String?
   // BNM RMiT applicability + critical-system answers + consultation status.
   // Shape defined in src/lib/compliance/bnm-rmit.ts (ProjectComplianceJson).
   compliance      Json?

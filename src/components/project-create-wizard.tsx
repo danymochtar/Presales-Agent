@@ -10,8 +10,9 @@ import { PURCHASE_MODEL_LABELS, type Term, type CloudType } from "@/lib/pricing/
 import { projectTypeLabel, type ProjectType, type DeliverableKind, DELIVERABLE_PREREQS } from "@/lib/deliverable-prereqs";
 import { useFileParser } from "@/lib/use-file-parser";
 import { CloudTogglePicker, RegionPickerPerCloud, PurchaseModelPicker } from "@/components/cloud-region-pickers";
-import { MigrationStrategyPicker } from "@/components/migration-strategy-picker";
+import { SolutionAreaSuggester } from "@/components/solution-area-suggester";
 import type { MigrationStrategy } from "@/lib/inventory/paas-recommender";
+import type { SolutionArea } from "@/lib/inventory/solution-area";
 
 type Confidence = "high" | "medium" | "low";
 
@@ -71,6 +72,7 @@ export function ProjectCreateWizard() {
   });
   const [purchaseModel, setPurchaseModel] = useState<Term>("consumption");
   const [migrationStrategy, setMigrationStrategy] = useState<MigrationStrategy>("lift_and_shift");
+  const [solutionArea, setSolutionArea] = useState<SolutionArea | null>(null);
 
   async function runExtraction() {
     if (parsedFiles.length === 0) {
@@ -166,6 +168,7 @@ export function ProjectCreateWizard() {
           cloudRegions,
           purchaseModel,
           migrationStrategy,
+          solutionArea: solutionArea ?? undefined,
           inputs,
           projectType: extracted?.projectType,
           projectTypeConfidence: extracted?.confidence?.projectType,
@@ -402,11 +405,19 @@ export function ProjectCreateWizard() {
             </div>
 
             <div className="space-y-2 pt-2 border-t">
-              <Label>Migration strategy</Label>
+              <Label>Solution area + migration strategy</Label>
               <p className="text-xs text-muted-foreground">
-                Drives PaaS routing in the BOM. Non-modernizable workloads (AD, container hosts, Oracle on Azure) stay IaaS regardless.
+                The agent assesses your uploaded files and suggests the best-fit solution area
+                (migration / modernization / data platform / AI app / SIEM / DR / FinOps / POC / …).
+                Verify or refine before continuing.
               </p>
-              <MigrationStrategyPicker value={migrationStrategy} onChange={setMigrationStrategy} />
+              <SolutionAreaSuggester
+                parsedFiles={parsedFiles}
+                area={solutionArea}
+                setArea={setSolutionArea}
+                strategy={migrationStrategy}
+                setStrategy={setMigrationStrategy}
+              />
             </div>
 
             {extracted && (extracted.keyRequirements.length > 0 || extracted.constraints.length > 0) && (
