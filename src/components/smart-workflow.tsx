@@ -25,13 +25,13 @@ const stageLabel = (s: StageId) => DELIVERABLE_PREREQS[s].label;
 // with customer profile + current IT landscape (system types, applications,
 // databases, identity, network, ops, security).
 const DEFAULT_FLOWS: Record<string, StageId[]> = {
-  migration:     ["customer-study", "assessment", "architecture", "bom", "tco", "project-plan", "proposal"],
-  greenfield:    ["customer-study", "architecture", "bom", "tco", "project-plan", "proposal"],
-  modernization: ["customer-study", "assessment", "architecture", "bom", "project-plan", "proposal"],
-  dr:            ["customer-study", "architecture", "bom", "project-plan", "proposal"],
-  poc:           ["customer-study", "architecture", "bom", "proposal"],
-  optimization:  ["customer-study", "assessment", "bom", "proposal"],
-  unknown:       ["customer-study", "assessment", "architecture", "bom", "tco", "project-plan", "proposal"],
+  migration:     ["customer-study", "assessment", "architecture", "bom", "professional-services", "tco", "project-plan", "proposal"],
+  greenfield:    ["customer-study", "architecture", "bom", "professional-services", "tco", "project-plan", "proposal"],
+  modernization: ["customer-study", "assessment", "architecture", "bom", "professional-services", "project-plan", "proposal"],
+  dr:            ["customer-study", "architecture", "bom", "professional-services", "project-plan", "proposal"],
+  poc:           ["customer-study", "architecture", "bom", "professional-services", "proposal"],
+  optimization:  ["customer-study", "assessment", "bom", "professional-services", "proposal"],
+  unknown:       ["customer-study", "assessment", "architecture", "bom", "professional-services", "tco", "project-plan", "proposal"],
 };
 
 const CONFIDENCE_CHIP: Record<string, string> = {

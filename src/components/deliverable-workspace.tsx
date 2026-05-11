@@ -31,7 +31,7 @@ export function DeliverableWorkspace({
   projectId: string;
   projectName: string;
   projectMode: "production" | "training";
-  deliverableType: "bom" | "proposal" | "architecture" | "assessment" | "project_plan" | "tco" | "sow" | "ms_offering" | "customer_study";
+  deliverableType: "bom" | "proposal" | "architecture" | "assessment" | "project_plan" | "tco" | "sow" | "ms_offering" | "customer_study" | "professional_services";
   generatePath: string;
   prerequisiteMessage: string | null;
   canGenerate: boolean;

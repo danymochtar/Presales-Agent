@@ -42,7 +42,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const project = await prisma.project.findFirst({
     where: { id, tenant: { users: { some: { id: session.user.id } } } },
     include: {
-      tenant: { include: { rateCardItems: true, catalogItems: true, patterns: { where: { active: true, deliverableType: "bom" } } } },
+      tenant: { include: { patterns: { where: { active: true, deliverableType: "bom" } } } },
       inputs: { orderBy: { createdAt: "desc" }, take: 1 },
     },
   });
@@ -126,12 +126,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       standards: project.tenant.standards,
       guardrails: project.tenant.guardrails,
     },
-    rateCard: project.tenant.rateCardItems.map((r) => ({
-      role: r.role, level: r.level, dailyRate: r.dailyRate, currency: r.currency, location: r.location,
-    })),
-    serviceCatalog: project.tenant.catalogItems.map((s) => ({
-      service: s.service, defaultEffortDays: s.defaultEffortDays, prerequisite: s.prerequisite, deliverable: s.deliverable, notes: s.notes,
-    })),
     learnedPatterns: project.tenant.patterns.map((p) => ({
       pattern: p.pattern, scope: p.scope, conditions: p.conditions, confidence: p.confidence,
     })),

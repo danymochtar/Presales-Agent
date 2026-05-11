@@ -26,7 +26,7 @@ Return ONLY a JSON object matching this schema. No prose, no code fences.
   "constraints":      ["string"],
   "projectType": "migration" | "greenfield" | "modernization" | "dr" | "poc" | "optimization" | "unknown",
   "projectTypeRationale": "string — 1-2 sentence explanation pulling exact phrases from the docs",
-  "suggestedDeliverables": ["customer-study" | "assessment" | "architecture" | "bom" | "tco" | "project-plan" | "proposal" | "sow" | "ms-offering"],
+  "suggestedDeliverables": ["customer-study" | "assessment" | "architecture" | "bom" | "professional-services" | "tco" | "project-plan" | "proposal" | "sow" | "ms-offering"],
   "confidence": {
     "customer":         "high" | "medium" | "low",
     "industry":         "high" | "medium" | "low",

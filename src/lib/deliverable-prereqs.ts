@@ -18,6 +18,7 @@ export type DeliverableKind =
   | "assessment"
   | "architecture"
   | "bom"
+  | "professional-services"
   | "tco"
   | "project-plan"
   | "proposal"
@@ -95,6 +96,7 @@ const DB_TYPE_BY_KIND: Record<DeliverableKind, string> = {
   "assessment": "assessment",
   "architecture": "architecture",
   "bom": "bom",
+  "professional-services": "professional_services",
   "tco": "tco",
   "project-plan": "project_plan",
   "proposal": "proposal",
@@ -148,10 +150,20 @@ export const DELIVERABLE_PREREQS: Record<DeliverableKind, Prereqs> = {
   "bom": {
     kind: "bom",
     label: "BOM",
-    shortDesc: "Bill of Materials — cloud consumption + professional services costing.",
+    shortDesc: "Cloud consumption costing (Azure / AWS / GCP) — infrastructure line items only. Professional services are produced separately.",
     group: "commercial",
     needs: { customer: true, scope: false, inventory: true, clouds: true, regions: true, purchaseModel: true, onPremBaseline: false },
     recommendedUpstream: ["assessment", "architecture"],
+    hardUpstream: [],
+  },
+  "professional-services": {
+    kind: "professional-services",
+    label: "Professional services",
+    shortDesc: "One-time implementation effort — mandays per phase, role mix, daily rates from the rate card, margin applied.",
+    group: "commercial",
+    needs: { customer: true, scope: true, inventory: false, clouds: true, regions: false, purchaseModel: false, onPremBaseline: false },
+    optionalFields: ["scope"],
+    recommendedUpstream: ["assessment", "architecture", "bom"],
     hardUpstream: [],
   },
   "tco": {
@@ -206,6 +218,7 @@ export const DELIVERABLES_IN_LIFECYCLE_ORDER: DeliverableKind[] = [
   "assessment",
   "architecture",
   "bom",
+  "professional-services",
   "tco",
   "project-plan",
   "proposal",
