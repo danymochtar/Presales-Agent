@@ -13,6 +13,8 @@ import { projectTypeLabel, kindOfDbType, type DeliverableKind } from "@/lib/deli
 import { relTime } from "@/lib/format-time";
 import { eligiblePrograms, topMatchSummary } from "@/lib/funding/eligibility";
 import type { CloudType } from "@/lib/pricing/types";
+import { isApplicable as rmitApplicable, isAcknowledged as rmitAcknowledged } from "@/lib/compliance/bnm-rmit";
+import { score as meddpiccScore, healthBand, type Meddpicc } from "@/lib/meddpicc";
 
 type Deliverable = {
   id: string;
@@ -72,6 +74,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   const fundingTop = Object.keys(acrByCloud).length > 0
     ? topMatchSummary(eligiblePrograms({ acrByCloud, market: "B" }))
     : null;
+  const dealHealth = meddpiccScore(project.meddpicc as Meddpicc | null, project.stage);
+  const dealHealthBand = healthBand(dealHealth.totalPct);
 
   const byType = (t: string) => project.deliverables.filter((d) => d.type === t) as Deliverable[];
   const groupedDeliverables = DELIVERABLE_DEFS.map((def) => ({ def, items: byType(def.type) }));
@@ -151,8 +155,41 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         </div>
         <div className="shrink-0">
           <ProjectModeToggle projectId={project.id} initialMode={project.mode as "production" | "training"} />
+          <Link
+            href={`/projects/${project.id}/meddpicc`}
+            className={`mt-2 block rounded-md border p-2 text-xs hover:border-primary transition ${
+              dealHealthBand === "green" ? "border-emerald-300 bg-emerald-50 dark:bg-emerald-900/10"
+              : dealHealthBand === "amber" ? "border-amber-300 bg-amber-50 dark:bg-amber-900/10"
+              : "border-rose-300 bg-rose-50 dark:bg-rose-900/10"}`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-medium">MEDDPICC</span>
+              <span>{dealHealth.totalPct}%</span>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              {dealHealth.blockers[0] ? dealHealth.blockers[0].reason : "Well qualified"}
+            </p>
+          </Link>
         </div>
       </div>
+
+      {rmitApplicable(project) && (
+        <div className={`rounded-md border p-3 flex items-start justify-between gap-3 ${rmitAcknowledged(project) ? "bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-900/50" : "bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-900/50"}`}>
+          <div className="text-sm">
+            <p className="font-medium">
+              {rmitAcknowledged(project)
+                ? "BNM RMiT compliance check completed"
+                : "BNM RMiT applies to this project"}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Policy Document BNM/RH/PD 028-98 (28 Nov 2025). Proposal + SOW generation is blocked until the compliance check is acknowledged.
+            </p>
+          </div>
+          <Link href={`/projects/${project.id}/compliance`} className="text-sm underline shrink-0">
+            {rmitAcknowledged(project) ? "Review →" : "Open check →"}
+          </Link>
+        </div>
+      )}
 
       {/* Inputs */}
       <Card>

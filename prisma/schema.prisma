@@ -202,6 +202,11 @@ model Project {
   cloudRegions    Json?
   // consumption (PAYG / On-demand) | reserved-1y | reserved-3y | savings-1y | savings-3y
   purchaseModel   String   @default("consumption")
+  // BNM RMiT applicability + critical-system answers + consultation status.
+  // Shape defined in src/lib/compliance/bnm-rmit.ts (ProjectComplianceJson).
+  compliance      Json?
+  // MEDDPICC scoring rubric. Shape in src/lib/meddpicc.ts (Meddpicc).
+  meddpicc        Json?
   // migration | greenfield | modernization | dr | poc | optimization | unknown
   projectType            String?
   projectTypeConfidence  String?  // high | medium | low

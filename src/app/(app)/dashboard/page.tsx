@@ -9,6 +9,7 @@ import { CloudChip } from "@/components/cloud-chip";
 
 import { projectTypeLabel, DELIVERABLE_PREREQS, kindOfDbType } from "@/lib/deliverable-prereqs";
 import { relTime } from "@/lib/format-time";
+import { score as meddpiccScore, healthBand, type Meddpicc } from "@/lib/meddpicc";
 
 const STAGE_TYPES = ["assessment", "architecture", "bom", "tco", "project_plan", "proposal"];
 
@@ -176,6 +177,19 @@ export default async function DashboardPage() {
                             <span className="text-xs text-muted-foreground">
                               {completed}/{total} stages
                             </span>
+                            {(() => {
+                              const h = meddpiccScore(project.meddpicc as Meddpicc | null, project.stage);
+                              const band = healthBand(h.totalPct);
+                              const cls = band === "green"
+                                ? "text-emerald-700 dark:text-emerald-300"
+                                : band === "amber" ? "text-amber-700 dark:text-amber-300"
+                                : "text-rose-700 dark:text-rose-300";
+                              return (
+                                <span className={`text-xs ${cls}`} title={h.blockers[0]?.reason ?? "Well qualified"}>
+                                  · MEDDPICC {h.totalPct}%
+                                </span>
+                              );
+                            })()}
                             <span className="text-xs text-muted-foreground">· {relTime(project.updatedAt)}</span>
                           </div>
                         </div>

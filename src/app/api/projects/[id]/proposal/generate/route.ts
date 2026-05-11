@@ -9,6 +9,7 @@ import type { CloudType } from "@/lib/pricing";
 import { logLlmCall } from "@/lib/ai-logging";
 import { findMatchingTemplates, formatTemplatesAsPromptSection } from "@/lib/templates";
 import { eligiblePrograms, type ProgramMatch } from "@/lib/funding/eligibility";
+import { isApplicable, isAcknowledged, compliancePostureMarkdown } from "@/lib/compliance/bnm-rmit";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -42,6 +43,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     },
   });
   if (!project) return new Response("not found", { status: 404 });
+  if (isApplicable(project) && !isAcknowledged(project)) {
+    return new Response(
+      `BNM RMiT applies to this BFSI / Malaysia project but the compliance check hasn't been acknowledged. Open /projects/${id}/compliance to complete it.`,
+      { status: 412 },
+    );
+  }
   if (!project.tenant) return new Response("tenant missing", { status: 400 });
 
   const targetClouds = ((project.targetClouds as string[]) ?? ["azure"]).filter((c) => c !== "gcp") as CloudType[];
@@ -253,7 +260,7 @@ Generate the proposal now in Markdown following the **${mode}** mode structure. 
             cloudProvider,
             version,
             status: "draft",
-            contentMd: fullText,
+            contentMd: fullText + (compliancePostureMarkdown(project) ? `\n\n---\n\n${compliancePostureMarkdown(project)}` : ""),
             metadata: {
               mode,
               clouds: cloudsInScope,

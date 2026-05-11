@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { streamText } from "ai";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isApplicable, isAcknowledged, compliancePostureMarkdown } from "@/lib/compliance/bnm-rmit";
 import { gateway, DEFAULT_MODEL } from "@/lib/ai";
 import { GENERATE_SOW_SYSTEM } from "@/lib/prompts/generate-sow";
 import { fxRateOrFallback } from "@/lib/pricing/fx";
@@ -41,6 +42,13 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   });
   if (!project) return new Response("not found", { status: 404 });
   if (!project.tenant) return new Response("tenant missing", { status: 400 });
+
+  if (isApplicable(project) && !isAcknowledged(project)) {
+    return new Response(
+      `BNM RMiT applies to this BFSI / Malaysia project but the compliance check hasn't been acknowledged. Open /projects/${id}/compliance to complete it.`,
+      { status: 412 },
+    );
+  }
 
   if (cloudParam === "compare") {
     return new Response(
@@ -192,7 +200,7 @@ Generate the SOW now in Markdown following the **${mode}** mode structure. Pull 
             cloudProvider,
             version,
             status: "draft",
-            contentMd: fullText,
+            contentMd: fullText + (compliancePostureMarkdown(project) ? `\n\n---\n\n${compliancePostureMarkdown(project)}` : ""),
             metadata: {
               mode,
               clouds: cloudsInScope,
