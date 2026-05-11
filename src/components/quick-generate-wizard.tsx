@@ -18,8 +18,11 @@ import { type Term, type CloudType } from "@/lib/pricing/types";
 import { useFileParser } from "@/lib/use-file-parser";
 import { streamGenerate } from "@/lib/sse-stream";
 import { CloudTogglePicker, RegionPickerPerCloud, PurchaseModelPicker } from "@/components/cloud-region-pickers";
+import { WorkloadReview } from "@/components/workload-review";
+import { assessCompleteness, mergeWorkloadSets } from "@/lib/inventory/completeness";
+import { type WorkloadSet } from "@/lib/inventory/workload";
 
-type Step = "pick" | "fill" | "running";
+type Step = "pick" | "fill" | "review" | "running";
 
 export function QuickGenerateWizard() {
   const router = useRouter();
@@ -36,6 +39,10 @@ export function QuickGenerateWizard() {
   });
   const [purchaseModel, setPurchaseModel] = useState<Term>("consumption");
   const [onPremBaseline, setOnPremBaseline] = useState("");
+
+  // Edited workload set from the review step. When null, fall back to whatever
+  // parsedFiles produced. Set on transition from "fill" → "review".
+  const [reviewedWorkloads, setReviewedWorkloads] = useState<WorkloadSet | null>(null);
 
   const [runText, setRunText] = useState("");
   const [runErr, setRunErr] = useState<string | null>(null);
@@ -100,34 +107,74 @@ export function QuickGenerateWizard() {
     setCloudRegions((r) => ({ ...r, [c]: { ...r[c], [k]: v } }));
   }
 
+  // Merge every parsed file's workloads into a single set so the review step
+  // has the full picture (and the project create call gets one canonical input).
+  const parsedWorkloadSet: WorkloadSet | null = useMemo(() => {
+    const sets = parsedFiles.map((f) => f.workloads).filter((w): w is WorkloadSet => !!w && w.workloads.length > 0);
+    if (sets.length === 0) return null;
+    return sets.reduce((acc, s) => (acc ? mergeWorkloadSets(acc, s) : s), null as WorkloadSet | null);
+  }, [parsedFiles]);
+
+  const effectiveWorkloads = reviewedWorkloads ?? parsedWorkloadSet;
+
   function validate(): string | null {
     if (!kind || !prereqs) return "pick a deliverable first";
     if (combinedNeeds.customer && !isOptional("customer") && !customer.trim()) return "customer is required";
     if (combinedNeeds.scope && !isOptional("scope") && !scope.trim()) return "scope summary is required";
     if (combinedNeeds.inventory && !isOptional("inventory")) {
-      const hasWorkloads = parsedFiles.some((f) => f.workloads && f.workloads.workloads.length > 0);
-      if (!hasWorkloads) return "upload an inventory (RVTools / Azure Migrate / CSV) — needed to size workloads";
+      if (!effectiveWorkloads || effectiveWorkloads.workloads.length === 0) {
+        return "upload an inventory (RVTools / Azure Migrate / CSV) — needed to size workloads";
+      }
     }
     if (combinedNeeds.clouds && !isOptional("clouds") && targetClouds.length === 0) return "pick at least one target cloud";
     return null;
   }
 
-  async function run() {
+  function handleGenerateClick() {
     const v = validate();
     if (v) { setErr(v); return; }
-    if (!kind || !prereqs) return;
     setErr(null);
+    // Inventory-needing deliverables: route through the mapping review when
+    // any workload is blocking OR completeness < 100%. Lets the user fix
+    // gaps inline or upload more files instead of getting a hard 400.
+    if (combinedNeeds.inventory && effectiveWorkloads) {
+      const report = assessCompleteness(effectiveWorkloads);
+      if (!report.canGenerate || report.completenessPct < 100) {
+        if (!reviewedWorkloads) setReviewedWorkloads(effectiveWorkloads);
+        setStep("review");
+        return;
+      }
+    }
+    void runGenerate(effectiveWorkloads);
+  }
+
+  async function runGenerate(workloadsToUse: WorkloadSet | null) {
+    if (!kind || !prereqs) return;
     setStep("running");
     setRunText("");
+    setErr(null);
 
     try {
-      const inputs = parsedFiles.map((f) => ({
+      const inputs = parsedFiles.map((f, idx) => ({
         kind: f.kind,
         filename: f.filename,
         rawSummary: f.rawSummary,
         textContent: f.textContent,
-        workloadsJson: f.workloads,
+        // Replace the first file's workloadsJson with the reviewed set so the
+        // generate route sees the user's edits. Other files keep their text.
+        workloadsJson: idx === 0 && workloadsToUse ? workloadsToUse : f.workloads,
       }));
+      // If the wizard had no files at all but the user manually added rows
+      // in the review step, synthesize a single inventory input.
+      if (inputs.length === 0 && workloadsToUse && workloadsToUse.workloads.length > 0) {
+        inputs.push({
+          kind: "rvtools",
+          filename: "manual-inventory.json",
+          rawSummary: `${workloadsToUse.totals.count} workloads · ${workloadsToUse.totals.cpu} vCPU · ${workloadsToUse.totals.ramGb} GB RAM · manually entered`,
+          textContent: undefined,
+          workloadsJson: workloadsToUse,
+        });
+      }
       const cloudsForProject: CloudType[] = combinedNeeds.clouds ? targetClouds : ["azure"];
       const regionsForProject = combinedNeeds.regions
         ? cloudRegions
@@ -227,8 +274,36 @@ export function QuickGenerateWizard() {
     );
   }
 
-  // step === "fill" or "running"
   if (!prereqs || !kind) return null;
+
+  if (step === "review" && effectiveWorkloads) {
+    return (
+      <Card>
+        <CardHeader>
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <CardTitle className="text-base">Inventory mapping — {prereqs.label}</CardTitle>
+              <CardDescription>
+                Review what was parsed from your uploads. Fix gaps inline, apply defaults to missing fields,
+                or add another file. Generation unlocks once every workload has at least CPU + RAM.
+              </CardDescription>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => { setReviewedWorkloads(null); setStep("fill"); }}>
+              ← Edit form
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <WorkloadReview
+            initial={effectiveWorkloads}
+            deliverableLabel={prereqs.label}
+            onBack={() => setStep("fill")}
+            onContinue={(set) => { setReviewedWorkloads(set); void runGenerate(set); }}
+          />
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>
@@ -397,7 +472,7 @@ export function QuickGenerateWizard() {
 
         <div className="flex justify-between items-center pt-2 border-t">
           <Button variant="ghost" onClick={() => { setKind(null); setStep("pick"); }}>← Back</Button>
-          <Button onClick={run} disabled={step === "running"}>
+          <Button onClick={handleGenerateClick} disabled={step === "running"}>
             {step === "running"
               ? "Generating…"
               : stagesToRun.length > 1
