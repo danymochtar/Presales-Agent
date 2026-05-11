@@ -97,6 +97,11 @@ export function DeliverableWorkspace({
               <a href={`/api/deliverables/${selectedDeliverableId}/docx`}>Download .docx</a>
             </Button>
           )}
+          {selectedDeliverableId && deliverableType === "bom" && (
+            <Button asChild variant="outline" size="sm">
+              <a href={`/api/deliverables/${selectedDeliverableId}/xlsx`}>Download .xlsx</a>
+            </Button>
+          )}
           <Button onClick={generate} disabled={streaming || !canGenerate} size="sm">
             {streaming ? "Generating..." : "Generate new version"}
           </Button>

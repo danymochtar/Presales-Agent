@@ -17,6 +17,7 @@ import { classifyWorkload, WORKLOAD_TYPE_LABELS } from "@/lib/inventory/workload
 import { detectComponents, COMPONENT_KIND_LABELS } from "@/lib/inventory/component-detector";
 import { recommendPaas, MIGRATION_STRATEGY_LABELS, type MigrationStrategy } from "@/lib/inventory/paas-recommender";
 import { lzForCloud } from "@/lib/landing-zone/catalog";
+import { parseLineItemsFromBomMarkdown } from "@/lib/exporters/bom-xlsx";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -292,6 +293,12 @@ Generate the BOM now in Markdown following the **${mode}-mode** structure. Apply
         }
 
         const cloudProvider = cloudParam === "compare" ? "compare" : (cloudParam as string);
+        const lineItems = parseLineItemsFromBomMarkdown(fullText);
+        const lineItemCounts = {
+          total: lineItems.length,
+          landingZone: lineItems.filter((i) => i.section === "landing_zone").length,
+          workload: lineItems.filter((i) => i.section === "workload").length,
+        };
         const last = await prisma.deliverable.findFirst({
           where: { projectId: project.id, type: "bom", cloudProvider },
           orderBy: { version: "desc" },
@@ -314,6 +321,11 @@ Generate the BOM now in Markdown following the **${mode}-mode** structure. Apply
               migrationStrategy,
               detectedComponents: detectedComponents as unknown as object,
               componentCounts: componentCounts as object,
+              // Calculator-format structured line items extracted from the
+              // LLM's trailing JSON block. Consumed by GET /api/deliverables/
+              // [id]/xlsx to render the workbook on download.
+              lineItems: lineItems as unknown as object,
+              lineItemCounts,
               monthlyComputeBaselineUsdByCloud: Object.fromEntries(
                 Object.entries(pricingByCloud).map(([c, v]) => {
                   const lic = (v as { licensing?: { workloadCounts?: unknown } }).licensing;
