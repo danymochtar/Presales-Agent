@@ -8,6 +8,7 @@ import { GENERATE_PROJECT_PLAN_SYSTEM } from "@/lib/prompts/generate-project-pla
 import type { CloudType } from "@/lib/pricing";
 import { logLlmCall } from "@/lib/ai-logging";
 import { findMatchingTemplates, formatTemplatesAsPromptSection } from "@/lib/templates";
+import { parseWaveTable, checkWaveLimits, formatWaveWarnings } from "@/lib/wave-planner";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -182,6 +183,12 @@ Generate the deployment plan now in Markdown following the **${mode}** mode stru
         }
 
         const cloudProvider = cloudParam === "compare" ? "compare" : cloudParam;
+        const waves = parseWaveTable(fullText);
+        const waveWarnings = checkWaveLimits(waves);
+        const finalContent = fullText + formatWaveWarnings(waveWarnings);
+        if (waveWarnings.length > 0) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ delta: formatWaveWarnings(waveWarnings) })}\n\n`));
+        }
         const last = await prisma.deliverable.findFirst({
           where: { projectId: project.id, type: "project_plan", cloudProvider },
           orderBy: { version: "desc" },
@@ -194,7 +201,7 @@ Generate the deployment plan now in Markdown following the **${mode}** mode stru
             cloudProvider,
             version,
             status: "draft",
-            contentMd: fullText,
+            contentMd: finalContent,
             metadata: {
               mode,
               clouds: cloudsInScope,
@@ -202,6 +209,7 @@ Generate the deployment plan now in Markdown following the **${mode}** mode stru
               sourceArchIds: cloudsInScope.map((c) => upstreamByCloud[c].arch?.id).filter(Boolean),
               sourceAssessmentIds: cloudsInScope.map((c) => upstreamByCloud[c].assess?.id).filter(Boolean),
               templateIds: templates.map((t) => t.id),
+              waveWarnings: waveWarnings as unknown as object,
               generatedAt: new Date().toISOString(),
               model: DEFAULT_MODEL,
             } as object,

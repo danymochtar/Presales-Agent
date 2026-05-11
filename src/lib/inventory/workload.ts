@@ -11,6 +11,13 @@ export type Workload = {
   notes?: string;
 };
 
+export type CollectorMetadata = {
+  collectorVersion?: string;   // e.g. "4.7.1"
+  collectionDate?: string;     // ISO date if known
+  vcenterHost?: string;        // hostname of the source vCenter
+  warnings?: string[];         // provenance/version warnings
+};
+
 export type WorkloadSet = {
   source: "rvtools" | "azure_migrate" | "generic" | "manual";
   totals: {
@@ -21,6 +28,7 @@ export type WorkloadSet = {
     osMix: Record<string, number>;
   };
   workloads: Workload[];
+  collector?: CollectorMetadata;
 };
 
 export function summarize(workloads: Workload[]): WorkloadSet["totals"] {

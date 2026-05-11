@@ -68,7 +68,7 @@ Per line: service, role mix, mandays, daily rate, subtotal. Apply margin per ten
 - Region: primary + DR (use the labels passed in the project context, not generic defaults)
 - Purchase model used for compute costing (PAYG / RI-1y / RI-3y / Savings Plan-1y / Savings Plan-3y) and the implied commitment
 - Hours per month (730 default)
-- AHB / hybrid benefit / BYOL where applicable
+- Licensing optimization — read the supplied \`licensing\` block per cloud, do NOT guess AHB/BYOL savings. For Azure clouds with Windows/SQL/RHEL workloads, include an explicit "AHB savings: USD X/month" line in the Commercial summary. For AWS clouds with SQL/RHEL workloads, include "AWS License Mobility savings: USD X/month". Flag these as advisory ± 15-20% and recommend confirmation in the vendor calculator.
 - Any SKU pricing fallbacks (e.g. SEA used because MY Central not yet GA for Azure SKU X; ap-southeast-5 prices estimated for AWS new region)
 
 ## 7. Risks

@@ -6,7 +6,8 @@ import { prisma } from "@/lib/prisma";
 import { gateway, DEFAULT_MODEL } from "@/lib/ai";
 import { GENERATE_BOM_SYSTEM } from "@/lib/prompts/generate-bom";
 import { batchPriceCompute, azureLabelToArm, type CloudType } from "@/lib/pricing";
-import { PURCHASE_MODEL_LABELS, type Term } from "@/lib/pricing/types";
+import { PURCHASE_MODEL_LABELS, type Term, type ComputeQuoteResult } from "@/lib/pricing/types";
+import { licensingScenario } from "@/lib/pricing/licensing";
 import { fxRateOrFallback, usdTo } from "@/lib/pricing/fx";
 import { recommendSkuForCloud } from "@/lib/inventory/sizing";
 import type { Workload, WorkloadSet } from "@/lib/inventory/workload";
@@ -90,6 +91,18 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       winSkus.length ? batchPriceCompute(cloud, winSkus, region, "windows", purchaseModel) : Promise.resolve({}),
     ]);
 
+    // Estimate the PAYG monthly compute baseline so the licensing module can
+    // compute % savings deterministically (avoids the LLM guessing AHB math).
+    const baseMonthly = sizedWorkloads.reduce((sum, w) => {
+      const sku = w.recommendedSku;
+      if (!sku) return sum;
+      const tbl: Record<string, ComputeQuoteResult> = w.os === "windows" ? winPrices : linuxPrices;
+      const r = tbl[sku];
+      if (r && r.found) return sum + (r.monthlyUsd ?? 0) * w.count;
+      return sum;
+    }, 0);
+    const licensing = licensingScenario(cloud, { ...workloadSet, workloads: sizedWorkloads }, baseMonthly);
+
     return [cloud, {
       regionLabel: labelPrimary ?? PRICING_REGION_DEFAULTS[cloud].primary,
       regionPricingId: region,
@@ -98,6 +111,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       purchaseModelLabel: PURCHASE_MODEL_LABELS[purchaseModel],
       sizedWorkloads,
       prices: { linux: linuxPrices, windows: winPrices },
+      licensing,
     }] as const;
   }));
   const pricingByCloud: Record<string, unknown> = Object.fromEntries(cloudEntries);

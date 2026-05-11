@@ -211,6 +211,9 @@ export function ProjectCreateWizard() {
                 className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-secondary file:px-3 file:py-1.5 file:text-sm file:font-medium hover:file:bg-secondary/80"
               />
               {uploading && <p className="text-xs text-muted-foreground mt-1">Parsing…</p>}
+              <p className="text-[11px] text-muted-foreground mt-1.5">
+                For RVTools exports: use only the official Dell-hosted RVTools (robware.net / rvtools.com) per the May 2025 supply-chain advisory.
+              </p>
             </div>
 
             {parsedFiles.length > 0 && (

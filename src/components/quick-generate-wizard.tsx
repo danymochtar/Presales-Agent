@@ -320,6 +320,7 @@ export function QuickGenerateWizard() {
               Inventory{!isOptional("inventory") && <span className="text-destructive ml-0.5">*</span>}
             </Label>
             <p className="text-xs text-muted-foreground">RVTools / Azure Migrate Excel, generic CSV, or a workload list.</p>
+            <p className="text-[11px] text-muted-foreground">For RVTools: use only the official Dell-hosted build (robware.net / rvtools.com) per the May 2025 supply-chain advisory.</p>
             <input
               id="file"
               type="file"

@@ -78,12 +78,16 @@ export async function parseDocument(
     }
     if (workloads && workloads.workloads.length > 0) {
       const t = workloads.totals;
+      const collectorTag = workloads.collector?.collectorVersion
+        ? ` · collector RVTools ${workloads.collector.collectorVersion}${workloads.collector.collectionDate ? ` (${workloads.collector.collectionDate})` : ""}${workloads.collector.vcenterHost ? ` from ${workloads.collector.vcenterHost}` : ""}`
+        : "";
+      if (workloads.collector?.warnings?.length) warnings.push(...workloads.collector.warnings);
       return {
         kind,
         filename,
         contentType,
         workloads,
-        rawSummary: `${t.count} workloads, ${t.cpu} vCPU, ${t.ramGb} GB RAM, ${t.storageGb} GB storage. OS mix: ${JSON.stringify(t.osMix)}`,
+        rawSummary: `${t.count} workloads, ${t.cpu} vCPU, ${t.ramGb} GB RAM, ${t.storageGb} GB storage. OS mix: ${JSON.stringify(t.osMix)}${collectorTag}`,
         truncated: false,
         warnings,
       };

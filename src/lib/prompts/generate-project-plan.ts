@@ -54,8 +54,15 @@ Mode signalled in user message ("mode: single | compare | hybrid") with cloud ta
 - Resources (roles + manday count)
 
 ## 4. Wave plan (migration phase detail)
-If the Assessment provided wave grouping, expand each wave inside the Migrate phase:
-| Wave | Workloads | Dependencies | Duration | Cutover window | Rollback strategy |
+If the Assessment provided wave grouping, expand each wave inside the Migrate phase. Use this exact column header so the post-check can parse it:
+| Wave | Apps | Servers | Databases | Duration (weeks) | Dependencies | Cutover window | Rollback strategy |
+
+### Hard rules for wave construction (IBM methodology)
+- **≤ 20 applications** per wave
+- **≤ 150 servers** per wave
+- **≤ 30 databases** per wave
+- **4–8 week** wave duration
+If the inventory exceeds any limit, SPLIT into multiple waves and sequence by application dependency. Do not bundle a 200-server wave just because it fits the calendar — delivery teams reject those plans. The server-side post-check will append a warnings block if any wave exceeds these limits.
 
 ## 5. Timeline (Mermaid Gantt)
 \`\`\`mermaid

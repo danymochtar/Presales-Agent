@@ -174,6 +174,7 @@ export default function HelpPage() {
             <li><strong>SOW needs a BOM first:</strong> server-enforced. Quick generate handles this for you (it pipelines BOM → SOW). If you&apos;re using the Full pipeline, generate the BOM for the same cloud first.</li>
             <li><strong>&ldquo;Load failed&rdquo; (iOS Safari):</strong> a network blip during streaming. Retry. If it keeps happening, generate from the Workflow pipeline button — it&apos;s more tolerant of reconnects.</li>
             <li><strong>Output truncated:</strong> reduce scope (one cloud at a time, or split deliverables instead of compare mode).</li>
+            <li><strong>RVTools warning on upload:</strong> the file chip shows &quot;Unknown collector&quot; if the <code>vMetaData</code> sheet is missing or the version predates the May 2025 supply-chain advisory. Re-export with the official Dell-hosted RVTools (robware.net / rvtools.com) and try again.</li>
           </ul>
         </CardContent>
       </Card>
