@@ -32,7 +32,7 @@ export function QuickGenerateWizard() {
   const [customer, setCustomer] = useState("");
   const [industry, setIndustry] = useState("");
   const [scope, setScope] = useState("");
-  const { parsedFiles, uploading, err: parseErr, uploadFiles, setErr: setParseErr } = useFileParser();
+  const { parsedFiles, uploading, err: parseErr, uploadFiles, removeFile, setErr: setParseErr } = useFileParser();
   const [targetClouds, setTargetClouds] = useState<CloudType[]>(["azure"]);
   const [cloudRegions, setCloudRegions] = useState<Record<string, { primary: string; dr: string }>>({
     azure: { ...MARKET_DEFAULT_REGIONS.azure },
@@ -492,7 +492,13 @@ export function QuickGenerateWizard() {
                   <li key={i} className="text-xs flex items-center gap-2 border rounded p-2">
                     <span className="bg-accent rounded px-1.5 py-0.5">{f.kind}</span>
                     <span className="font-medium truncate flex-1">{f.filename}</span>
-                    <span className="text-muted-foreground">{f.rawSummary}</span>
+                    <span className="text-muted-foreground truncate">{f.rawSummary}</span>
+                    <button
+                      type="button"
+                      aria-label={`Remove ${f.filename}`}
+                      onClick={() => removeFile(i)}
+                      className="text-muted-foreground hover:text-destructive text-base leading-none px-1 shrink-0"
+                    >×</button>
                   </li>
                 ))}
               </ul>
@@ -523,7 +529,13 @@ export function QuickGenerateWizard() {
                   <li key={i} className="text-xs flex items-center gap-2 border rounded p-2">
                     <span className="bg-accent rounded px-1.5 py-0.5">{f.kind}</span>
                     <span className="font-medium truncate flex-1">{f.filename}</span>
-                    <span className="text-muted-foreground">{f.rawSummary}</span>
+                    <span className="text-muted-foreground truncate">{f.rawSummary}</span>
+                    <button
+                      type="button"
+                      aria-label={`Remove ${f.filename}`}
+                      onClick={() => removeFile(i)}
+                      className="text-muted-foreground hover:text-destructive text-base leading-none px-1 shrink-0"
+                    >×</button>
                   </li>
                 ))}
               </ul>
