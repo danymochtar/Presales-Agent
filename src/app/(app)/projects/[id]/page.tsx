@@ -144,6 +144,11 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                 {project.purchaseModel}
               </span>
             )}
+            {project.migrationStrategy && project.migrationStrategy !== "lift_and_shift" && (
+              <span className="text-[10px] uppercase tracking-wider rounded px-1.5 py-0.5 bg-violet-100 text-violet-900 dark:bg-violet-900/30 dark:text-violet-200">
+                {project.migrationStrategy.replace(/_/g, " ")}
+              </span>
+            )}
             {fundingTop && fundingTop !== "No funded program matches at current ACR estimates" && (
               <span
                 className="text-[10px] uppercase tracking-wider rounded px-1.5 py-0.5 bg-emerald-100 text-emerald-900 dark:bg-emerald-900/30 dark:text-emerald-200"

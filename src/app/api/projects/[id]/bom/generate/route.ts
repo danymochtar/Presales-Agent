@@ -14,6 +14,9 @@ import type { Workload, WorkloadSet } from "@/lib/inventory/workload";
 import { logLlmCall } from "@/lib/ai-logging";
 import { findMatchingTemplates, formatTemplatesAsPromptSection } from "@/lib/templates";
 import { classifyWorkload, WORKLOAD_TYPE_LABELS } from "@/lib/inventory/workload-classifier";
+import { detectComponents, COMPONENT_KIND_LABELS } from "@/lib/inventory/component-detector";
+import { recommendPaas, MIGRATION_STRATEGY_LABELS, type MigrationStrategy } from "@/lib/inventory/paas-recommender";
+import { lzForCloud } from "@/lib/landing-zone/catalog";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -74,6 +77,14 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const targetClouds = (project.targetClouds ?? ["azure"]) as CloudType[];
   const cloudRegions = (project.cloudRegions as CloudRegions | null) ?? {};
   const purchaseModel = (project.purchaseModel ?? "consumption") as Term;
+  const migrationStrategy = (project.migrationStrategy ?? "lift_and_shift") as MigrationStrategy;
+
+  // Detect workload components (DB / web / cache / file / AD / containers).
+  // Empty when workloadSet is null (non-VM artifact types like SIEM / AI).
+  const { components: detectedComponents, counts: componentCounts } = workloadSet
+    ? detectComponents(workloadSet)
+    : { components: [], counts: {} as Partial<Record<string, number>> };
+  const detectedKinds = detectedComponents.map((c) => c.kind);
 
   let cloudsToPrice: CloudType[];
   if (cloudParam === "compare") {
@@ -137,6 +148,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       sizedWorkloads,
       prices: { linux: linuxPrices, windows: winPrices },
       licensing,
+      landingZone: lzForCloud(cloud, detectedKinds),
+      paasRecommendations: workloadSet
+        ? recommendPaas(workloadSet, detectedComponents, cloud, migrationStrategy)
+        : [],
     }] as const;
   }));
   const pricingByCloud: Record<string, unknown> = Object.fromEntries(cloudEntries);
@@ -187,6 +202,32 @@ ${JSON.stringify({
 }, null, 2)}
 \`\`\`
 Match the output structure to \`primaryType\` per the system prompt. State the detected type + rationale in Section 1 (Executive summary).
+
+## Migration strategy
+\`\`\`json
+${JSON.stringify({
+  strategy: migrationStrategy,
+  label: MIGRATION_STRATEGY_LABELS[migrationStrategy],
+  rules:
+    migrationStrategy === "lift_and_shift"
+      ? "Every workload stays IaaS. Ignore the PaaS recommendations block. Do NOT add a Modernization-target column."
+      : migrationStrategy === "hybrid"
+        ? "Modernize the obvious wins (databases, caches, file shares) to PaaS. Keep custom apps + AD + container hosts on IaaS. Use the PaaS recommendations block VERBATIM — do not invent targets."
+        : "Modernize every component that has a clean PaaS target. Non-modernizable rows (modernizable: false) stay IaaS with an explicit 'Keep as IaaS — {reason}' note. Use the PaaS recommendations block VERBATIM.",
+}, null, 2)}
+\`\`\`
+
+## Detected workload components
+\`\`\`json
+${JSON.stringify({
+  totalDetected: detectedComponents.length,
+  countsByKind: Object.fromEntries(
+    Object.entries(componentCounts).map(([k, v]) => [`${k} (${COMPONENT_KIND_LABELS[k as keyof typeof COMPONENT_KIND_LABELS] ?? k})`, v]),
+  ),
+  components: detectedComponents,
+}, null, 2)}
+\`\`\`
+Surface low-confidence detections under Assumptions so the reviewer can override.
 
 ## Project
 - Customer: ${project.customer}
@@ -263,6 +304,9 @@ Generate the BOM now in Markdown following the **${mode}-mode** structure. Apply
               priceSnapshot: pricingByCloud as object,
               workloadCount: workloadSet?.totals.count ?? 0,
               workloadProfile: profile,
+              migrationStrategy,
+              detectedComponents: detectedComponents as unknown as object,
+              componentCounts: componentCounts as object,
               monthlyComputeBaselineUsdByCloud: Object.fromEntries(
                 Object.entries(pricingByCloud).map(([c, v]) => {
                   const lic = (v as { licensing?: { workloadCounts?: unknown } }).licensing;

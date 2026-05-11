@@ -20,6 +20,7 @@ const InputSeed = z.object({
 const ProjectTypeEnum = z.enum(["migration", "greenfield", "modernization", "dr", "poc", "optimization", "unknown"]);
 const StageEnum = z.enum(["customer-study", "assessment", "architecture", "bom", "professional-services", "tco", "project-plan", "proposal", "sow", "ms-offering"]);
 const PurchaseModelEnum = z.enum(["consumption", "reserved-1y", "reserved-3y", "savings-1y", "savings-3y"]);
+const MigrationStrategyEnum = z.enum(["lift_and_shift", "hybrid", "modernization"]);
 
 const CreateProject = z.object({
   name: z.string().min(2),
@@ -31,6 +32,7 @@ const CreateProject = z.object({
   cloudRegions: z.record(z.string(), z.object({ primary: z.string(), dr: z.string() })).optional(),
   primaryCloud: CloudEnum.optional(),
   purchaseModel: PurchaseModelEnum.default("consumption"),
+  migrationStrategy: MigrationStrategyEnum.default("lift_and_shift"),
   projectType: ProjectTypeEnum.optional(),
   projectTypeConfidence: z.enum(["high", "medium", "low"]).optional(),
   projectTypeRationale: z.string().optional(),
@@ -66,7 +68,7 @@ export async function POST(req: NextRequest) {
   const parsed = CreateProject.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-  const { targetClouds, cloudRegions, inputs, suggestedDeliverables, purchaseModel, ...rest } = parsed.data;
+  const { targetClouds, cloudRegions, inputs, suggestedDeliverables, purchaseModel, migrationStrategy, ...rest } = parsed.data;
   const regions = cloudRegions ?? defaultRegionsFor(targetClouds);
 
   const project = await prisma.$transaction(async (tx) => {
@@ -76,6 +78,7 @@ export async function POST(req: NextRequest) {
         targetClouds,
         cloudRegions: regions as object,
         purchaseModel,
+        migrationStrategy,
         suggestedDeliverables: suggestedDeliverables ?? [],
         tenantId: tenant.id,
       },

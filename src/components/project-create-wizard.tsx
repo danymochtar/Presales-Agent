@@ -10,6 +10,8 @@ import { PURCHASE_MODEL_LABELS, type Term, type CloudType } from "@/lib/pricing/
 import { projectTypeLabel, type ProjectType, type DeliverableKind, DELIVERABLE_PREREQS } from "@/lib/deliverable-prereqs";
 import { useFileParser } from "@/lib/use-file-parser";
 import { CloudTogglePicker, RegionPickerPerCloud, PurchaseModelPicker } from "@/components/cloud-region-pickers";
+import { MigrationStrategyPicker } from "@/components/migration-strategy-picker";
+import type { MigrationStrategy } from "@/lib/inventory/paas-recommender";
 
 type Confidence = "high" | "medium" | "low";
 
@@ -68,6 +70,7 @@ export function ProjectCreateWizard() {
     aws:   { ...MARKET_DEFAULT_REGIONS.aws },
   });
   const [purchaseModel, setPurchaseModel] = useState<Term>("consumption");
+  const [migrationStrategy, setMigrationStrategy] = useState<MigrationStrategy>("lift_and_shift");
 
   async function runExtraction() {
     if (parsedFiles.length === 0) {
@@ -162,6 +165,7 @@ export function ProjectCreateWizard() {
           targetClouds,
           cloudRegions,
           purchaseModel,
+          migrationStrategy,
           inputs,
           projectType: extracted?.projectType,
           projectTypeConfidence: extracted?.confidence?.projectType,
@@ -395,6 +399,14 @@ export function ProjectCreateWizard() {
                 How the customer plans to consume cloud — drives pricing in the BOM. Same model is applied to both clouds for fair comparison.
               </p>
               <PurchaseModelPicker value={purchaseModel} onChange={setPurchaseModel} showHints />
+            </div>
+
+            <div className="space-y-2 pt-2 border-t">
+              <Label>Migration strategy</Label>
+              <p className="text-xs text-muted-foreground">
+                Drives PaaS routing in the BOM. Non-modernizable workloads (AD, container hosts, Oracle on Azure) stay IaaS regardless.
+              </p>
+              <MigrationStrategyPicker value={migrationStrategy} onChange={setMigrationStrategy} />
             </div>
 
             {extracted && (extracted.keyRequirements.length > 0 || extracted.constraints.length > 0) && (

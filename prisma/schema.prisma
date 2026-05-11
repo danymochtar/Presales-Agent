@@ -202,6 +202,9 @@ model Project {
   cloudRegions    Json?
   // consumption (PAYG / On-demand) | reserved-1y | reserved-3y | savings-1y | savings-3y
   purchaseModel   String   @default("consumption")
+  // lift_and_shift | hybrid | modernization — drives PaaS routing in the BOM
+  // generator. Non-modernizable workloads stay on IaaS regardless of strategy.
+  migrationStrategy String @default("lift_and_shift")
   // BNM RMiT applicability + critical-system answers + consultation status.
   // Shape defined in src/lib/compliance/bnm-rmit.ts (ProjectComplianceJson).
   compliance      Json?

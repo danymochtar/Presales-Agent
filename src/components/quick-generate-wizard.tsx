@@ -18,6 +18,8 @@ import { type Term, type CloudType } from "@/lib/pricing/types";
 import { useFileParser } from "@/lib/use-file-parser";
 import { streamGenerate } from "@/lib/sse-stream";
 import { CloudTogglePicker, RegionPickerPerCloud, PurchaseModelPicker } from "@/components/cloud-region-pickers";
+import { MigrationStrategyPicker } from "@/components/migration-strategy-picker";
+import { MIGRATION_STRATEGY_LABELS, type MigrationStrategy } from "@/lib/inventory/paas-recommender";
 import { WorkloadReview } from "@/components/workload-review";
 import { assessCompleteness, mergeWorkloadSets } from "@/lib/inventory/completeness";
 import { summarize, type WorkloadSet } from "@/lib/inventory/workload";
@@ -38,6 +40,7 @@ export function QuickGenerateWizard() {
     azure: { ...MARKET_DEFAULT_REGIONS.azure },
   });
   const [purchaseModel, setPurchaseModel] = useState<Term>("consumption");
+  const [migrationStrategy, setMigrationStrategy] = useState<MigrationStrategy>("lift_and_shift");
   const [onPremBaseline, setOnPremBaseline] = useState("");
 
   // Edited workload set from the review step. When null, fall back to whatever
@@ -198,6 +201,7 @@ export function QuickGenerateWizard() {
           targetClouds: cloudsForProject,
           cloudRegions: regionsForProject,
           purchaseModel,
+          migrationStrategy,
           inputs: inputs.length > 0 ? inputs : undefined,
         }),
       });
@@ -376,6 +380,9 @@ export function QuickGenerateWizard() {
               )}
               {combinedNeeds.purchaseModel && (
                 <div><strong>Purchase model:</strong> {purchaseModel}</div>
+              )}
+              {combinedNeeds.inventory && (
+                <div><strong>Migration strategy:</strong> {MIGRATION_STRATEGY_LABELS[migrationStrategy]}</div>
               )}
             </div>
           )}
@@ -582,6 +589,18 @@ export function QuickGenerateWizard() {
           <div className="space-y-2">
             <Label>Purchase model</Label>
             <PurchaseModelPicker value={purchaseModel} onChange={setPurchaseModel} />
+          </div>
+        )}
+
+        {/* Migration strategy applies to inventory-driven deliverables (BOM / Assessment / TCO).
+            Non-inventory deliverables (customer study, architecture, etc.) don't need it. */}
+        {combinedNeeds.inventory && (
+          <div className="space-y-2">
+            <Label>Migration strategy</Label>
+            <p className="text-xs text-muted-foreground">
+              Drives PaaS routing in the BOM. Non-modernizable workloads (AD, container hosts) stay IaaS regardless.
+            </p>
+            <MigrationStrategyPicker value={migrationStrategy} onChange={setMigrationStrategy} />
           </div>
         )}
 

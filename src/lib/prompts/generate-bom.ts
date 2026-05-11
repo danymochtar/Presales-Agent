@@ -70,6 +70,7 @@ Pricing is pre-fetched at this purchase model — use the supplied unit costs as
 
 ## 2. Workload summary
 Table: workload group, count, total vCPU, total RAM (GB), total storage (GB), OS mix.
+**When migration strategy is hybrid or modernization**, add a final "Modernization target" column on the workload table. For each workload that appears in the supplied \`paasRecommendations\` block, paste the recommendation's \`target\` verbatim. For rows with \`modernizable: false\`, write "Keep as IaaS — {reason}". For rows with no recommendation (no detected component), leave the column blank.
 
 ## 3. Cloud consumption (monthly, USD)
 Group by service family appropriate to the cloud:
@@ -79,27 +80,38 @@ Group by service family appropriate to the cloud:
 For each line: service, SKU/instance, region, qty, unit, unit cost (USD), monthly subtotal (USD), notes.
 Subtotal per group + grand total.
 
-## 4. Commercial summary (cloud consumption only)
+**When migration strategy is hybrid or modernization**, add a "PaaS targets (estimated)" sub-section listing each \`paasRecommendations\` entry as its own line: \`target\` + \`tierHint\` + qty 1 + "advisory pricing — confirm in Azure / AWS / GCP calculator". Do NOT invent a precise monthly figure for PaaS lines (detailed PaaS pricing modules are queued for a later release); flag every PaaS line "Pricing TBD — advisory tier hint only".
+
+## 4. Landing zone candidates
+Render the supplied \`landingZone\` block per cloud as a markdown table:
+| Category | Component | Framework | Description | Notes |
+
+Use the framework label (CAF / WAR / Cloud Foundation) verbatim. Do NOT invent components beyond the supplied list. Add a one-line note if a pair-only component is included (e.g. "Surfaces because a web tier was detected"). For non-VM workload profiles (siem_soc / ai_ml / data_platform), include only the network + ops + identity baseline and call out in the section header that the catalog is filtered to baseline-only because no application workloads were detected.
+
+## 5. Commercial summary (cloud consumption only)
 - Year 1 cloud total (monthly × 12)
 - Year 2-3 (cloud recurring × 12, RI/Savings Plan savings if applicable)
 - 3-year cloud TCO
 **Do NOT include professional services / mandays / implementation effort in this BOM. Those are produced as a separate Professional Services deliverable so the customer can see cloud burn and one-time implementation costs in distinct line items. Refer the reader to the Professional Services deliverable when summarising.**
 
-## 5. Assumptions
+## 6. Assumptions
 - FX rate used + source + date
 - Region: primary + DR (use the labels passed in the project context, not generic defaults)
 - Purchase model used for compute costing (PAYG / RI-1y / RI-3y / Savings Plan-1y / Savings Plan-3y) and the implied commitment
+- Migration strategy used (lift_and_shift / hybrid / modernization) and how it shaped the Modernization-target column
 - Hours per month (730 default)
 - Licensing optimization — read the supplied \`licensing\` block per cloud, do NOT guess AHB/BYOL savings. For Azure clouds with Windows/SQL/RHEL workloads, include an explicit "AHB savings: USD X/month" line in the Commercial summary. For AWS clouds with SQL/RHEL workloads, include "AWS License Mobility savings: USD X/month". Flag these as advisory ± 15-20% and recommend confirmation in the vendor calculator.
 - Any SKU pricing fallbacks (e.g. SEA used because MY Central not yet GA for Azure SKU X; ap-southeast-5 prices estimated for AWS new region)
+- Low-confidence component detections (from the \`Detected workload components\` block) — list them so reviewer can correct.
 
-## 6. Risks
+## 7. Risks
 - Pricing volatility (FX, cloud rate changes, reserved expiration)
 - SKU/region availability
 - Migration cutover dependencies
+- PaaS line pricing is advisory until tier is confirmed in vendor calculator
 - Compliance considerations (PDPA, BNM RMiT for BFSI, sovereignty)
 
-## 7. Out of scope
+## 8. Out of scope
 Explicit list.
 
 # Compare mode structure
@@ -122,7 +134,12 @@ End with grand-total row per cloud.
 ## 4. Capability matrix
 Per workload domain (compute, storage, db, identity, security, monitoring, dr): which clouds were chosen and why. Highlight where one cloud is materially better/worse for THIS customer.
 
-## 5. Commercial comparison (cloud consumption only)
+## 5. Landing zone candidates per cloud
+Render the supplied \`landingZone\` block for EACH cloud as its own subsection table:
+| Category | Component | Framework | Description | Notes |
+Same rules as single-cloud Section 4. Use this to highlight where one cloud's baseline LZ is heavier/lighter than the other.
+
+## 6. Commercial comparison (cloud consumption only)
 | Item | Azure | AWS |
 |---|---|---|
 | Year 1 cloud | ... | ... |
@@ -131,18 +148,20 @@ Per workload domain (compute, storage, db, identity, security, monitoring, dr): 
 
 Show MYR equivalents in parentheses for headline numbers. **Do NOT include professional-services / mandays / implementation cost here — those are produced as a separate Professional Services deliverable.**
 
-## 6. Recommendation
+If migration strategy is hybrid / modernization, add a separate PaaS-targets section per cloud listing each \`paasRecommendations\` entry with cloud-specific target service. PaaS lines stay advisory — flag "Pricing TBD".
+
+## 7. Recommendation
 - **Recommended: {cloud}**
 - Why: 3-5 bullets covering TCO, capability fit, customer constraints (skills, geo, compliance, partner posture)
 - Caveats: where the recommendation could flip (e.g. "if BNM data residency mandated, AWS ap-southeast-5 isn't yet certified — fall back to Azure Malaysia West")
 
-## 7. Assumptions
+## 8. Assumptions
 Same headers as single-cloud, with per-cloud breakdowns where they differ.
 
-## 8. Risks
+## 9. Risks
 Per-cloud risks + portfolio risks (egress between clouds if hybrid, skill gaps, vendor lock-in trade-offs).
 
-## 9. Out of scope
+## 10. Out of scope
 Same as single-cloud.
 
 # Style
