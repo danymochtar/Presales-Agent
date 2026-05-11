@@ -86,24 +86,35 @@ Roles per phase from the rate card. RACI per major activity (Markdown table).
 - EXCLUDED — explicit list (point to Out of Scope)
 - Pricing validity period (FX volatility statement)
 
-## 10. Assumptions & dependencies
+## 10. Funding capture (hyperscaler programs the customer can use)
+Render this section directly from the **Funding capture — eligible programs** JSON block in the user message. Do NOT invent programs and do NOT change payout amounts. For each match in the JSON:
+- **Program** (Azure Accelerate / Azure Frontier Offer / AWS MAP / AWS MAP Lite / GCP RaMP) + tier/phase
+- **Estimated payout** in USD (and MYR equivalent using the supplied FX rate)
+- **What it funds** (paste the "details" bullets from the JSON)
+- **Caveats** (paste the "caveats" bullets)
+- **Recommended next step** (e.g. "submit Azure Accelerate nomination via Partner Center after assessment sign-off")
+End the section with a 1-sentence headline summing the total capturable funding across all matched programs.
+
+If the JSON block is empty, write a single sentence stating no funded program matches at the current ACR estimate and recommend revisiting after BOM totals are firmed up.
+
+## 11. Assumptions & dependencies
 Cross-reference BOM Assumptions, plus proposal-specific:
 - Customer responsibilities (network access, identity admin approval, security approvals, app team engagement)
 - Vendor/3rd-party dependencies
 - Decision SLAs from customer side
 - Hardware lead times if hybrid
 
-## 11. Risks & mitigations
+## 12. Risks & mitigations
 Top 5 specific to engagement type + customer industry.
 - Compare mode: add cloud-choice risks (lock-in, skill gaps, cross-cloud egress, residency cert lapse)
 - Hybrid mode: add cross-cloud risks (latency, egress cost, identity sync drift)
 
-## 12. Why us
+## 13. Why us
 - Partner tier(s) — multi-cloud partner posture if relevant (Microsoft Solutions Partner / AWS Partner / Google Partner)
 - Relevant certifications + compliance posture (ISO 27001, SOC 2, etc.)
 - 2-3 reference customers (if knowledge_base has won deals in same segment) — anonymized if needed
 
-## 13. Next steps
+## 14. Next steps
 3-5 concrete actions with owners and dates (or "to be agreed"). Include decision gates.
 
 # Style

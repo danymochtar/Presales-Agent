@@ -224,6 +224,23 @@ Generate the BOM now in Markdown following the **${mode}-mode** structure. Apply
               fxMyrPerUsd: fxRate,
               priceSnapshot: pricingByCloud as object,
               workloadCount: workloadSet.totals.count,
+              monthlyComputeBaselineUsdByCloud: Object.fromEntries(
+                Object.entries(pricingByCloud).map(([c, v]) => {
+                  const lic = (v as { licensing?: { workloadCounts?: unknown } }).licensing;
+                  // baseMonthly was passed into licensingScenario; recompute from sized workloads.
+                  const sized = (v as { sizedWorkloads: typeof workloadSet.workloads }).sizedWorkloads;
+                  const linuxTbl = (v as { prices: { linux: Record<string, ComputeQuoteResult> } }).prices.linux;
+                  const winTbl = (v as { prices: { windows: Record<string, ComputeQuoteResult> } }).prices.windows;
+                  const monthly = sized.reduce((s, w) => {
+                    const sku = w.recommendedSku;
+                    if (!sku) return s;
+                    const r = (w.os === "windows" ? winTbl : linuxTbl)[sku];
+                    return r && r.found ? s + (r.monthlyUsd ?? 0) * w.count : s;
+                  }, 0);
+                  return [c, Math.round(monthly * 100) / 100];
+                  void lic;
+                }),
+              ),
               templateIds: templates.map((t) => t.id),
               generatedAt: new Date().toISOString(),
               model: DEFAULT_MODEL,

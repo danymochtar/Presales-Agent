@@ -8,6 +8,7 @@ import { GENERATE_PROPOSAL_SYSTEM } from "@/lib/prompts/generate-proposal";
 import type { CloudType } from "@/lib/pricing";
 import { logLlmCall } from "@/lib/ai-logging";
 import { findMatchingTemplates, formatTemplatesAsPromptSection } from "@/lib/templates";
+import { eligiblePrograms, type ProgramMatch } from "@/lib/funding/eligibility";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -151,6 +152,31 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   });
   const templateSection = formatTemplatesAsPromptSection(templates);
 
+  // Estimate year-1 ACR per cloud from each cloud's latest BOM metadata.
+  // Falls back to 0 when no BOM exists yet.
+  const acrByCloud: Partial<Record<CloudType, number>> = {};
+  for (const c of cloudsInScope) {
+    const bom = upstreamByCloud[c]?.bom;
+    if (!bom) continue;
+    const meta = (bom.metadata ?? {}) as { monthlyComputeBaselineUsdByCloud?: Record<string, number> };
+    const monthly = meta.monthlyComputeBaselineUsdByCloud?.[c] ?? 0;
+    acrByCloud[c] = Math.round(monthly * 12);
+  }
+  const projectMeta = `${project.scopeSummary ?? ""} ${(project.suggestedDeliverables ?? []).join(" ")}`.toLowerCase();
+  const fundingMatches: ProgramMatch[] = eligiblePrograms({
+    acrByCloud,
+    market: project.tenant.country?.toLowerCase().includes("malaysia") ? "B" : "A",
+    hasModernWorkloads: {
+      newDatabase: /database\s*migration|new\s*db|cosmos|postgres|sql\s*db/.test(projectMeta),
+      fabric:      /microsoft\s*fabric|onelake/.test(projectMeta),
+      aiFoundry:   /ai\s*foundry|gen\s*ai|llm/.test(projectMeta),
+      sap:         /sap\s*(s\/4|hana|ecc)/.test(projectMeta),
+      oracle:      /oracle\s*(db|exadata|rac)/.test(projectMeta),
+      vmware:      /vmware|vsphere|avs/.test(projectMeta),
+      dataAnalytics: /analytics|data\s*warehouse|bigquery|snowflake/.test(projectMeta),
+    },
+  });
+
   const userMessage = `# Generate proposal for project: ${project.name}
 
 mode: ${mode}
@@ -176,6 +202,17 @@ ${upstreamBlocks.join("\n\n---\n\n")}
 ${contextDocs.length > 0 ? `## Customer context from uploaded documents
 ${contextDocs.map((d) => `### ${d.filename} (${d.kind})\n${d.text}`).join("\n\n---\n\n")}
 ` : ""}
+
+## Funding capture — eligible programs (deterministic match)
+Year-1 ACR estimate per cloud (USD): ${JSON.stringify(acrByCloud)}
+${fundingMatches.length === 0
+  ? "_No funded program matches at current ACR estimates. Recommend re-checking once BOM totals are firmed up._"
+  : `Eligible programs (sorted by estimated payout):
+\`\`\`json
+${JSON.stringify(fundingMatches, null, 2)}
+\`\`\`
+Render the **Funding capture** proposal section directly from this JSON — do NOT invent additional programs or change payout numbers. State each program's headline, the recommended deliverables / phases the customer can co-fund, and the specific caveats.`}
+
 Generate the proposal now in Markdown following the **${mode}** mode structure. Reference upstream deliverables explicitly (e.g. "as detailed in BOM v3"). Apply learned patterns where applicable.
 `;
 

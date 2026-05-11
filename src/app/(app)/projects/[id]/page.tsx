@@ -11,6 +11,8 @@ import { SmartWorkflow } from "@/components/smart-workflow";
 import { CloudChip } from "@/components/cloud-chip";
 import { projectTypeLabel, kindOfDbType, type DeliverableKind } from "@/lib/deliverable-prereqs";
 import { relTime } from "@/lib/format-time";
+import { eligiblePrograms, topMatchSummary } from "@/lib/funding/eligibility";
+import type { CloudType } from "@/lib/pricing/types";
 
 type Deliverable = {
   id: string;
@@ -56,6 +58,20 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
 
   const targetClouds = (project.targetClouds as string[]) ?? ["azure"];
   const cloudRegions = (project.cloudRegions as Record<string, { primary: string; dr: string }> | null) ?? {};
+
+  // Estimate funding eligibility from the latest BOM per cloud (if any).
+  const acrByCloud: Partial<Record<CloudType, number>> = {};
+  for (const c of targetClouds) {
+    const latestBom = project.deliverables
+      .filter((d) => d.type === "bom" && (d.cloudProvider === c || (!d.cloudProvider && c === "azure")))
+      .sort((a, b) => b.version - a.version)[0];
+    const meta = (latestBom?.metadata ?? {}) as { monthlyComputeBaselineUsdByCloud?: Record<string, number> };
+    const monthly = meta.monthlyComputeBaselineUsdByCloud?.[c] ?? 0;
+    if (monthly > 0) acrByCloud[c as CloudType] = Math.round(monthly * 12);
+  }
+  const fundingTop = Object.keys(acrByCloud).length > 0
+    ? topMatchSummary(eligiblePrograms({ acrByCloud, market: "B" }))
+    : null;
 
   const byType = (t: string) => project.deliverables.filter((d) => d.type === t) as Deliverable[];
   const groupedDeliverables = DELIVERABLE_DEFS.map((def) => ({ def, items: byType(def.type) }));
@@ -121,6 +137,14 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
             {project.purchaseModel && project.purchaseModel !== "consumption" && (
               <span className="text-[10px] uppercase tracking-wider rounded px-1.5 py-0.5 bg-primary/10 text-primary">
                 {project.purchaseModel}
+              </span>
+            )}
+            {fundingTop && fundingTop !== "No funded program matches at current ACR estimates" && (
+              <span
+                className="text-[10px] uppercase tracking-wider rounded px-1.5 py-0.5 bg-emerald-100 text-emerald-900 dark:bg-emerald-900/30 dark:text-emerald-200"
+                title={fundingTop}
+              >
+                {fundingTop}
               </span>
             )}
           </div>

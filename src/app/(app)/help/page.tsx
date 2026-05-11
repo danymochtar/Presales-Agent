@@ -161,6 +161,7 @@ export default function HelpPage() {
             <li><strong>Run Customer Study first:</strong> downstream deliverables are more contextual when there&apos;s a fresh customer profile + IT landscape to reference.</li>
             <li><strong>Quick projects can be promoted:</strong> add more uploads or generate more deliverables on the same project to turn it into a full engagement — no need to start over.</li>
             <li><strong>Stuck on naming?</strong> <Link href="/services" className="underline">Services mapping</Link> lists Azure / AWS / GCP equivalents side-by-side across compute, storage, network, database, security, AI, analytics, and more — with explicit gaps where a cloud has no first-party offering.</li>
+            <li><strong>Funding programs (Azure Accelerate / AWS MAP / GCP RaMP)</strong> are encoded in <code>src/lib/funding/programs.ts</code>. Once a project has a BOM, the project detail page shows the top eligible payout as a green chip and the proposal includes a Funding capture section. Refresh the catalog quarterly when MCI / MAP / RaMP terms change.</li>
           </ul>
         </CardContent>
       </Card>
