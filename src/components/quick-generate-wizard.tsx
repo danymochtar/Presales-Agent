@@ -22,7 +22,7 @@ import { WorkloadReview } from "@/components/workload-review";
 import { assessCompleteness, mergeWorkloadSets } from "@/lib/inventory/completeness";
 import { type WorkloadSet } from "@/lib/inventory/workload";
 
-type Step = "pick" | "fill" | "review" | "running";
+type Step = "pick" | "fill" | "review" | "summary" | "running";
 
 export function QuickGenerateWizard() {
   const router = useRouter();
@@ -134,9 +134,6 @@ export function QuickGenerateWizard() {
     const v = validate();
     if (v) { setErr(v); return; }
     setErr(null);
-    // Inventory-needing deliverables: route through the mapping review when
-    // any workload is blocking OR completeness < 100%. Lets the user fix
-    // gaps inline or upload more files instead of getting a hard 400.
     if (combinedNeeds.inventory && effectiveWorkloads) {
       const report = assessCompleteness(effectiveWorkloads);
       if (!report.canGenerate || report.completenessPct < 100) {
@@ -145,7 +142,12 @@ export function QuickGenerateWizard() {
         return;
       }
     }
-    void runGenerate(effectiveWorkloads);
+    // Skip the summary card for customer-study (form is tiny — no value).
+    if (kind === "customer-study") {
+      void runGenerate(effectiveWorkloads);
+      return;
+    }
+    setStep("summary");
   }
 
   async function runGenerate(workloadsToUse: WorkloadSet | null) {
@@ -298,8 +300,111 @@ export function QuickGenerateWizard() {
             initial={effectiveWorkloads}
             deliverableLabel={prereqs.label}
             onBack={() => setStep("fill")}
-            onContinue={(set) => { setReviewedWorkloads(set); void runGenerate(set); }}
+            onContinue={(set) => { setReviewedWorkloads(set); setStep("summary"); }}
           />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (step === "summary") {
+    const workloadCount = effectiveWorkloads?.totals.count ?? 0;
+    const cloudList = combinedNeeds.clouds ? targetClouds : [];
+    return (
+      <Card>
+        <CardHeader>
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <CardTitle className="text-base">Ready to generate — review the inputs</CardTitle>
+              <CardDescription>
+                The agent will use exactly what&apos;s listed below. Go back to fix anything;
+                otherwise click Generate to start streaming.
+              </CardDescription>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setStep(combinedNeeds.inventory ? "review" : "fill")}>
+              ← Back
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="rounded-md border p-3 space-y-1.5 text-sm">
+            <div className="text-xs uppercase tracking-wider text-muted-foreground">Deliverable</div>
+            <div className="font-medium">
+              {stagesToRun.length > 1
+                ? `${stagesToRun.map((s) => DELIVERABLE_PREREQS[s].label).join(" → ")} (pipeline)`
+                : prereqs.label}
+            </div>
+            <div className="text-xs text-muted-foreground">{prereqs.shortDesc}</div>
+          </div>
+
+          <div className="rounded-md border p-3 space-y-2 text-sm">
+            <div className="text-xs uppercase tracking-wider text-muted-foreground">Customer + scope</div>
+            <div><strong>Customer:</strong> {customer.trim() || (kind === "customer-study" ? "(industry pattern)" : "—")}</div>
+            {industry && <div><strong>Industry:</strong> {industry}</div>}
+            {scope && <div className="whitespace-pre-wrap"><strong>Scope notes:</strong> {scope}</div>}
+            {!industry && !scope && <div className="text-xs text-muted-foreground">No additional context supplied.</div>}
+          </div>
+
+          {combinedNeeds.clouds && (
+            <div className="rounded-md border p-3 space-y-2 text-sm">
+              <div className="text-xs uppercase tracking-wider text-muted-foreground">Cloud + commercial</div>
+              <div><strong>Target clouds:</strong> {cloudList.length > 0 ? cloudList.join(" + ").toUpperCase() : "—"}</div>
+              {combinedNeeds.regions && (
+                <div className="text-xs">
+                  {cloudList.map((c) => (
+                    <div key={c}>
+                      <strong>{c.toUpperCase()}:</strong> primary {cloudRegions[c]?.primary ?? "?"} · DR {cloudRegions[c]?.dr ?? "?"}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {combinedNeeds.purchaseModel && (
+                <div><strong>Purchase model:</strong> {purchaseModel}</div>
+              )}
+            </div>
+          )}
+
+          {(parsedFiles.length > 0 || workloadCount > 0) && (
+            <div className="rounded-md border p-3 space-y-2 text-sm">
+              <div className="text-xs uppercase tracking-wider text-muted-foreground">Documents + workloads</div>
+              {parsedFiles.length > 0 && (
+                <ul className="text-xs space-y-1">
+                  {parsedFiles.map((f, i) => (
+                    <li key={i} className="flex items-center gap-2">
+                      <span className="bg-accent rounded px-1.5 py-0.5">{f.kind}</span>
+                      <span className="truncate flex-1">{f.filename}</span>
+                      <span className="text-muted-foreground">{f.rawSummary}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {workloadCount > 0 && effectiveWorkloads && (
+                <div className="text-xs text-muted-foreground">
+                  Workloads: {workloadCount} · {effectiveWorkloads.totals.cpu} vCPU · {effectiveWorkloads.totals.ramGb} GB RAM · {effectiveWorkloads.totals.storageGb} GB storage
+                  {reviewedWorkloads && " (edited in mapping review)"}
+                </div>
+              )}
+            </div>
+          )}
+
+          {prereqs.recommendedUpstream.length > 0 && (
+            <p className="text-xs text-muted-foreground border-l-2 border-primary/30 pl-3">
+              <strong className="text-foreground">Quality reminder:</strong> {prereqs.label} is best with{" "}
+              {prereqs.recommendedUpstream.map((u) => DELIVERABLE_PREREQS[u].label).join(" + ")}{" "}
+              already produced. This Quick run draws only on what you supplied here.
+            </p>
+          )}
+
+          {err && <p className="text-sm text-destructive">{err}</p>}
+
+          <div className="flex justify-between items-center pt-2 border-t">
+            <Button variant="ghost" onClick={() => setStep(combinedNeeds.inventory ? "review" : "fill")}>← Back</Button>
+            <Button onClick={() => void runGenerate(effectiveWorkloads)}>
+              {stagesToRun.length > 1
+                ? `Generate ${stagesToRun.map((s) => DELIVERABLE_PREREQS[s].label).join(" + ")}`
+                : `Generate ${prereqs.label.toLowerCase()}`}
+            </Button>
+          </div>
         </CardContent>
       </Card>
     );
@@ -358,12 +463,18 @@ export function QuickGenerateWizard() {
           </div>
         )}
 
-        {kind === "customer-study" && (
+        {!combinedNeeds.inventory && (
           <div className="space-y-2">
-            <Label htmlFor="study-files">Or attach documents (optional)</Label>
+            <Label htmlFor="study-files">
+              {kind === "customer-study" ? "Or attach documents (optional)" : "Attach supporting documents (optional)"}
+            </Label>
             <p className="text-xs text-muted-foreground">
-              RFP / RFQ, meeting minutes, customer architecture diagrams, public annual report, regulator findings —
-              anything that can sharpen the briefing. .xlsx, .docx, .pdf, .txt, .md, .csv. 10MB per file.
+              {kind === "customer-study"
+                ? "RFP / RFQ, meeting minutes, customer architecture diagrams, public annual report, regulator findings — anything that can sharpen the briefing."
+                : kind === "architecture"
+                ? "Existing architecture diagrams, RFP, customer IT landscape descriptions, network topology notes — fed to the agent as context for the target-state design."
+                : "RFP, scope notes, customer-provided requirements, prior deliverables to compose from — anything that can sharpen the output."}
+              {" "}.xlsx, .docx, .pdf, .txt, .md, .csv. 10MB per file.
             </p>
             <input
               id="study-files"
