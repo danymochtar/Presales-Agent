@@ -20,7 +20,7 @@ import { streamGenerate } from "@/lib/sse-stream";
 import { CloudTogglePicker, RegionPickerPerCloud, PurchaseModelPicker } from "@/components/cloud-region-pickers";
 import { WorkloadReview } from "@/components/workload-review";
 import { assessCompleteness, mergeWorkloadSets } from "@/lib/inventory/completeness";
-import { type WorkloadSet } from "@/lib/inventory/workload";
+import { summarize, type WorkloadSet } from "@/lib/inventory/workload";
 
 type Step = "pick" | "fill" | "review" | "summary" | "running";
 
@@ -121,11 +121,9 @@ export function QuickGenerateWizard() {
     if (!kind || !prereqs) return "pick a deliverable first";
     if (combinedNeeds.customer && !isOptional("customer") && !customer.trim()) return "customer is required";
     if (combinedNeeds.scope && !isOptional("scope") && !scope.trim()) return "scope summary is required";
-    if (combinedNeeds.inventory && !isOptional("inventory")) {
-      if (!effectiveWorkloads || effectiveWorkloads.workloads.length === 0) {
-        return "upload an inventory (RVTools / Azure Migrate / CSV) — needed to size workloads";
-      }
-    }
+    // Inventory deliverables no longer hard-block when workloads are empty —
+    // the mapping review step is the canonical place to fix that (AI extract,
+    // add manually, or upload more). Any file format is accepted.
     if (combinedNeeds.clouds && !isOptional("clouds") && targetClouds.length === 0) return "pick at least one target cloud";
     return null;
   }
@@ -134,15 +132,16 @@ export function QuickGenerateWizard() {
     const v = validate();
     if (v) { setErr(v); return; }
     setErr(null);
-    if (combinedNeeds.inventory && effectiveWorkloads) {
-      const report = assessCompleteness(effectiveWorkloads);
-      if (!report.canGenerate || report.completenessPct < 100) {
-        if (!reviewedWorkloads) setReviewedWorkloads(effectiveWorkloads);
-        setStep("review");
-        return;
-      }
+    // Inventory-needing deliverables always route through mapping review.
+    // It handles every case: AI extraction from text, manual entry, fixing
+    // gaps, merging another upload. The summary step renders after Continue.
+    if (combinedNeeds.inventory) {
+      const seed: WorkloadSet = effectiveWorkloads ?? { source: "manual", workloads: [], totals: summarize([]) };
+      if (!reviewedWorkloads) setReviewedWorkloads(seed);
+      setStep("review");
+      return;
     }
-    // Skip the summary card for customer-study (form is tiny — no value).
+    // Customer-study skips the summary card — form is tiny, no value.
     if (kind === "customer-study") {
       void runGenerate(effectiveWorkloads);
       return;
@@ -278,7 +277,23 @@ export function QuickGenerateWizard() {
 
   if (!prereqs || !kind) return null;
 
-  if (step === "review" && effectiveWorkloads) {
+  if (step === "review") {
+    const seed: WorkloadSet = effectiveWorkloads ?? { source: "manual", workloads: [], totals: summarize([]) };
+    const hasText = parsedFiles.some((f) => f.textContent && f.textContent.trim().length > 0);
+    async function aiExtract(): Promise<{ set: WorkloadSet; warnings: string[] } | null> {
+      const texts = parsedFiles
+        .filter((f) => f.textContent && f.textContent.trim().length > 0)
+        .map((f) => ({ filename: f.filename, content: f.textContent! }));
+      if (texts.length === 0) return null;
+      const res = await fetch("/api/inventory/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ texts }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof j.error === "string" ? j.error : "extraction failed");
+      return { set: j.workloads as WorkloadSet, warnings: (j.warnings as string[]) ?? [] };
+    }
     return (
       <Card>
         <CardHeader>
@@ -286,8 +301,8 @@ export function QuickGenerateWizard() {
             <div>
               <CardTitle className="text-base">Inventory mapping — {prereqs.label}</CardTitle>
               <CardDescription>
-                Review what was parsed from your uploads. Fix gaps inline, apply defaults to missing fields,
-                or add another file. Generation unlocks once every workload has at least CPU + RAM.
+                Review parsed workloads, fill any gaps, or have the agent extract workloads from your uploaded
+                text. Generation unlocks once every workload has at least CPU + RAM.
               </CardDescription>
             </div>
             <Button variant="ghost" size="sm" onClick={() => { setReviewedWorkloads(null); setStep("fill"); }}>
@@ -297,10 +312,11 @@ export function QuickGenerateWizard() {
         </CardHeader>
         <CardContent>
           <WorkloadReview
-            initial={effectiveWorkloads}
+            initial={seed}
             deliverableLabel={prereqs.label}
             onBack={() => setStep("fill")}
             onContinue={(set) => { setReviewedWorkloads(set); setStep("summary"); }}
+            onAiExtract={hasText ? aiExtract : undefined}
           />
         </CardContent>
       </Card>
@@ -511,7 +527,11 @@ export function QuickGenerateWizard() {
             <Label htmlFor="file">
               Inventory{!isOptional("inventory") && <span className="text-destructive ml-0.5">*</span>}
             </Label>
-            <p className="text-xs text-muted-foreground">RVTools / Azure Migrate Excel, generic CSV, or a workload list.</p>
+            <p className="text-xs text-muted-foreground">
+              Any file works — RVTools / Azure Migrate / CSV is parsed directly into a workload table.
+              Anything else (architecture doc, RFP, free-form notes) is accepted and the agent will try to
+              extract workloads on the next step. You can also add rows manually.
+            </p>
             <p className="text-[11px] text-muted-foreground">For RVTools: use only the official Dell-hosted build (robware.net / rvtools.com) per the May 2025 supply-chain advisory.</p>
             <input
               id="file"

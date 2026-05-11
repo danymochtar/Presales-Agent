@@ -25,15 +25,40 @@ export function WorkloadReview({
   onContinue,
   onBack,
   deliverableLabel,
+  onAiExtract,
 }: {
   initial: WorkloadSet;
   onContinue: (set: WorkloadSet) => void;
   onBack: () => void;
   deliverableLabel: string;
+  onAiExtract?: () => Promise<{ set: WorkloadSet; warnings: string[] } | null>;
 }) {
   const [set, setSet] = useState<WorkloadSet>(initial);
   const { parsedFiles, uploading, uploadFiles, err } = useFileParser();
   const report = useMemo(() => assessCompleteness(set), [set]);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiErr, setAiErr] = useState<string | null>(null);
+  const [aiWarnings, setAiWarnings] = useState<string[]>([]);
+
+  async function runAiExtract() {
+    if (!onAiExtract) return;
+    setAiBusy(true);
+    setAiErr(null);
+    try {
+      const r = await onAiExtract();
+      if (!r) { setAiErr("nothing to extract — upload a file first"); return; }
+      setAiWarnings(r.warnings);
+      if (r.set.workloads.length === 0) {
+        setAiErr("AI didn't find any workload rows in the uploaded text. Try a different file or add workloads manually.");
+        return;
+      }
+      setSet((s) => mergeWorkloadSets(s, r.set));
+    } catch (e) {
+      setAiErr(e instanceof Error ? e.message : "extraction failed");
+    } finally {
+      setAiBusy(false);
+    }
+  }
 
   function mergeNewUploads() {
     let merged = set;
@@ -66,8 +91,48 @@ export function WorkloadReview({
 
   const newFilesReady = parsedFiles.some((f) => f.workloads && f.workloads.workloads.length > 0);
 
+  const isEmpty = set.workloads.length === 0;
+
   return (
     <div className="space-y-4">
+      {isEmpty && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-900/10 p-3 space-y-2">
+          <p className="text-sm font-medium">No workloads parsed yet</p>
+          <p className="text-xs text-muted-foreground">
+            The uploaded file didn&apos;t match the canonical RVTools / Azure Migrate columns
+            {onAiExtract ? "" : ", and no text content was extracted"}.
+            Pick one of these to continue:
+          </p>
+          <ul className="text-xs space-y-1 list-disc pl-5">
+            {onAiExtract && (
+              <li>
+                <strong>AI extract from uploaded text</strong> — the agent scans your file for
+                workload mentions (hostnames, vCPU, RAM, OS).
+              </li>
+            )}
+            <li><strong>Add workloads manually</strong> below — minimum is CPU + RAM per row.</li>
+            <li><strong>Upload another file</strong> using the box at the bottom.</li>
+          </ul>
+          {onAiExtract && (
+            <div>
+              <Button size="sm" onClick={runAiExtract} disabled={aiBusy}>
+                {aiBusy ? "Extracting…" : "Try AI extraction from uploaded text"}
+              </Button>
+            </div>
+          )}
+          {aiErr && <p className="text-xs text-destructive">{aiErr}</p>}
+        </div>
+      )}
+
+      {!isEmpty && aiWarnings.length > 0 && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-900/10 p-3 space-y-1">
+          <p className="text-xs font-medium">AI extraction notes</p>
+          <ul className="text-xs space-y-0.5 list-disc pl-5">
+            {aiWarnings.slice(0, 6).map((w, i) => <li key={i}>{w}</li>)}
+          </ul>
+        </div>
+      )}
+
       <div className="rounded-md border p-3 space-y-1">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <p className="text-sm font-medium">
@@ -77,7 +142,7 @@ export function WorkloadReview({
             report.canGenerate ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-200"
             : "bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200"
           }`}>
-            {report.canGenerate ? "ready" : `${report.blockingCount} blocking`}
+            {report.canGenerate ? "ready" : isEmpty ? "no workloads" : `${report.blockingCount} blocking`}
           </span>
         </div>
         <p className="text-xs text-muted-foreground">
@@ -197,7 +262,9 @@ export function WorkloadReview({
         <Button onClick={() => onContinue(set)} disabled={!report.canGenerate}>
           {report.canGenerate
             ? `Continue → generate ${deliverableLabel.toLowerCase()}`
-            : `Fix ${report.blockingCount} blocking row${report.blockingCount === 1 ? "" : "s"} first`}
+            : isEmpty
+              ? "Add at least one workload first"
+              : `Fix ${report.blockingCount} blocking row${report.blockingCount === 1 ? "" : "s"} first`}
         </Button>
       </div>
     </div>
