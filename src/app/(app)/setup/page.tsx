@@ -69,27 +69,52 @@ export default async function SetupPage() {
             <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${pipelineDone ? "bg-emerald-600 text-white" : fyDone ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
               {pipelineDone ? "✓" : "2"}
             </span>
-            Upload at least one pipeline source
+            Upload your foundation pipelines — previous FY + future targets
           </CardTitle>
           <CardDescription>
-            Drop your Microsoft biweekly pipe, SMB / SMC / ENT-PS segment list, sales-rep pipe, or funding tracker.
-            The customers + opportunities from this upload become the master list — new engagements pick from it
-            instead of starting from a blank customer field.
+            Two foundational uploads teach the agent your book of business. You can add more pipe docs later;
+            these two are the minimum.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {pipelineDone ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="rounded-md border bg-amber-50/40 dark:bg-amber-900/10 border-amber-200 dark:border-amber-900/40 p-3 space-y-1">
+              <p className="text-sm font-medium">📜 Previous FY pipeline (to learn from)</p>
+              <p className="text-xs text-muted-foreground">
+                Closed deals from prior fiscal years. The agent learns sales-cycle length, average deal size by
+                segment + industry, win-rate patterns, and which Solution Plays close fastest — so it can suggest
+                better lead-and-opportunity moves going forward.
+              </p>
+            </div>
+            <div className="rounded-md border bg-indigo-50/40 dark:bg-indigo-900/10 border-indigo-200 dark:border-indigo-900/40 p-3 space-y-1">
+              <p className="text-sm font-medium">🎯 Future-target pipeline (to plan against)</p>
+              <p className="text-xs text-muted-foreground">
+                Named accounts the team is chasing this fiscal year. Drives the FY-target slice on the Business
+                dashboard and the customer picker on new engagements — so you never start from a blank field.
+              </p>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Each upload is tagged with a purpose. Add as many pipe docs as you have — Microsoft biweekly, SMB / SMC
+            / ENT-PS segment lists, sales-rep pipes, funding programs (Azure Accelerate / MAP / RaMP). Commitment
+            status is one of: <strong>Committed</strong>, <strong>Upside</strong>, <strong>Uncommitted</strong>,
+            <strong>At Risk</strong>, plus closed <strong>Won</strong> / <strong>Lost</strong>. If you run Creatio
+            CRM, configure the connector on <Link href="/admin" className="underline">/admin</Link> instead of
+            uploading manually.
+          </p>
+          {pipelineDone && (
             <p className="text-sm">
               <strong>{trackerCount}</strong> tracker{trackerCount === 1 ? "" : "s"} loaded · {opportunityCount} opportunit{opportunityCount === 1 ? "y" : "ies"}.
             </p>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              No trackers yet. Upload your first Excel — the import wizard auto-detects column headers and lets you tag the rows by origin (FY carry-over / target / existing / net-new).
-            </p>
           )}
-          <Button asChild disabled={!fyDone}>
-            <Link href="/pipeline/trackers/new">{pipelineDone ? "Add another tracker" : "Upload a tracker"}</Link>
-          </Button>
+          <div className="flex gap-2">
+            <Button asChild disabled={!fyDone}>
+              <Link href="/pipeline/trackers/new">{pipelineDone ? "Add another tracker" : "Upload a pipeline"}</Link>
+            </Button>
+            <Button asChild variant="outline" disabled={!fyDone}>
+              <Link href="/admin">Connect Creatio instead</Link>
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

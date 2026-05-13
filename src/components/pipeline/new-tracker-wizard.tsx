@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { FieldMappingForm } from "./field-mapping-form";
 import type { FieldMapping, SheetPreview } from "@/lib/pipeline/field-mapping";
 import { OPPORTUNITY_ORIGINS, ORIGIN_LABELS, ORIGIN_DESCRIPTIONS, type OpportunityOrigin } from "@/lib/pipeline/origin";
+import { TRACKER_PURPOSES, PURPOSE_LABELS, PURPOSE_DESCRIPTIONS, type TrackerPurpose } from "@/lib/pipeline/purpose";
 
 const SOURCES: { value: string; label: string }[] = [
   { value: "microsoft", label: "Microsoft biweekly pipe" },
@@ -25,6 +26,7 @@ export function NewTrackerWizard() {
   const [name, setName] = useState("");
   const [source, setSource] = useState<string>("microsoft");
   const [defaultOrigin, setDefaultOrigin] = useState<OpportunityOrigin>("unknown");
+  const [purpose, setPurpose] = useState<TrackerPurpose>("current_pipe");
   const [preview, setPreview] = useState<SheetPreview[] | null>(null);
   const [mapping, setMapping] = useState<FieldMapping>({});
   const [step, setStep] = useState<"upload" | "map" | "saving" | "done">("upload");
@@ -54,6 +56,7 @@ export function NewTrackerWizard() {
     fd.set("name", name);
     fd.set("source", source);
     fd.set("defaultOriginKind", defaultOrigin);
+    fd.set("purpose", purpose);
     fd.set("mapping", JSON.stringify(mapping));
     const res = await fetch("/api/pipeline/trackers", { method: "POST", body: fd });
     if (!res.ok) {
@@ -86,6 +89,13 @@ export function NewTrackerWizard() {
                 {SOURCES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
             </div>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="tracker-purpose">What is this pipeline?</Label>
+            <select id="tracker-purpose" value={purpose} onChange={(e) => setPurpose(e.target.value as TrackerPurpose)} className="block w-full rounded border bg-background px-2 py-2 text-sm">
+              {TRACKER_PURPOSES.filter((p) => p !== "crm_sync").map((p) => <option key={p} value={p}>{PURPOSE_LABELS[p]}</option>)}
+            </select>
+            <p className="text-xs text-muted-foreground">{PURPOSE_DESCRIPTIONS[purpose]}</p>
           </div>
           <div className="space-y-1">
             <Label htmlFor="tracker-origin">Default origin for rows in this tracker</Label>

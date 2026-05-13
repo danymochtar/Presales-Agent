@@ -3,9 +3,20 @@ import { prisma } from "@/lib/prisma";
 import { getSuperadminContextForPage } from "@/lib/admin";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ResetWorkspaceButton } from "@/components/reset-workspace-button";
+import { CreatioIntegrationCard } from "@/components/creatio-integration-card";
+import type { CreatioCredentials } from "@/lib/integrations/creatio";
 
 export default async function AdminOverviewPage() {
   const ctx = (await getSuperadminContextForPage())!;
+  const integrations = (ctx.tenant.integrations ?? {}) as { creatio?: CreatioCredentials };
+  const creatioInitial = integrations.creatio
+    ? {
+        baseUrl: integrations.creatio.baseUrl,
+        username: integrations.creatio.username,
+        passwordSet: !!integrations.creatio.password,
+        lastSyncAt: integrations.creatio.lastSyncAt ?? null,
+      }
+    : null;
   const [templateCount, activeTemplates, llmCallCount, llmCallLast30dCount, userCount, projectCount] = await Promise.all([
     prisma.template.count({ where: { tenantId: ctx.tenant.id } }),
     prisma.template.count({ where: { tenantId: ctx.tenant.id, status: "active" } }),
@@ -66,6 +77,22 @@ export default async function AdminOverviewPage() {
             <li><strong>Usage</strong> — every LLM call (extraction, generation, training feedback) is logged with input + output tokens, model, duration, and outcome. Use this to track AI spend, spot stuck flows, and benchmark per-deliverable cost.</li>
             <li><strong>Users</strong> — multi-user pilot in a future phase. For now, the first user to sign up auto-becomes superadmin.</li>
           </ul>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>CRM connector — Creatio</CardTitle>
+          <CardDescription>
+            Pull opportunities from your Creatio CRM straight into the pipeline tracker. The connector runs
+            cookie-based forms auth against <code>/ServiceModel/AuthService.svc/Login</code> then OData v4 against
+            <code>/0/odata/Opportunity</code>. Each sync upserts by Creatio Id so re-running is safe. Created
+            opportunities land in a tracker named &quot;Creatio CRM&quot; tagged as a CRM sync — they can be re-tagged
+            by origin (carry-over / target / etc.) like any imported row.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <CreatioIntegrationCard initial={creatioInitial} />
         </CardContent>
       </Card>
 

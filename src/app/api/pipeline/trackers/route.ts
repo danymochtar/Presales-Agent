@@ -7,12 +7,14 @@ import { requireSessionAndTenant } from "@/lib/tenant";
 import { readWorkbookPreview, readWorkbookRows, suggestMapping, applyMapping, type FieldMapping, CANONICAL_FIELDS } from "@/lib/pipeline/field-mapping";
 import type { PipelineStatus } from "@/lib/pipeline/status";
 import { OPPORTUNITY_ORIGINS, detectOrigin, type OpportunityOrigin } from "@/lib/pipeline/origin";
+import { TRACKER_PURPOSES, detectPurpose, type TrackerPurpose } from "@/lib/pipeline/purpose";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const SourceEnum = z.enum(["microsoft", "smb", "smc", "ent_ps", "sales_rep", "funding", "other"]);
 const OriginEnum = z.enum(OPPORTUNITY_ORIGINS as [OpportunityOrigin, ...OpportunityOrigin[]]);
+const PurposeEnum = z.enum(TRACKER_PURPOSES as [TrackerPurpose, ...TrackerPurpose[]]);
 
 const FieldMappingSchema = z.record(z.enum(CANONICAL_FIELDS as [string, ...string[]]), z.string().nullable());
 const StatusMappingSchema = z.record(z.string(), z.string());
@@ -41,6 +43,7 @@ export async function POST(req: NextRequest) {
   const name = String(form.get("name") ?? "").trim();
   const source = String(form.get("source") ?? "other");
   const defaultOriginRaw = String(form.get("defaultOriginKind") ?? "unknown");
+  const purposeRaw = String(form.get("purpose") ?? "");
   const mappingRaw = form.get("mapping");
   const statusMappingRaw = form.get("statusMapping");
 
@@ -53,6 +56,9 @@ export async function POST(req: NextRequest) {
   const explicitOrigin = OriginEnum.safeParse(defaultOriginRaw);
   const defaultOriginKind: OpportunityOrigin =
     explicitOrigin.success ? explicitOrigin.data : (detectOrigin(name) ?? "unknown");
+  // Purpose: explicit form value wins; otherwise detect from the name.
+  const explicitPurpose = PurposeEnum.safeParse(purposeRaw);
+  const purpose: TrackerPurpose = explicitPurpose.success ? explicitPurpose.data : detectPurpose(name);
   if (!file || typeof file === "string") {
     return NextResponse.json({ error: "file required" }, { status: 400 });
   }
@@ -91,6 +97,7 @@ export async function POST(req: NextRequest) {
         fieldMapping: mapping as object,
         statusMapping: (statusMapping as object | null) ?? undefined,
         defaultOriginKind,
+        purpose,
         lastSyncAt: new Date(),
       },
     });

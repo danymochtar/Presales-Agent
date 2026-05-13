@@ -102,6 +102,12 @@ model Tenant {
   //   { startMonth: 1..12, startDay: 1..31, currentLabel: "FY27" }
   // Required before the dashboard renders — first-login setup gate forces it.
   fiscalYear   Json?
+  // External-system credentials, keyed by integration name. Shape:
+  //   { creatio: { baseUrl, username, password, lastSyncAt }, ... }
+  // Stored unencrypted on the JSON column for pilot only — production should
+  // wrap with a KMS-backed envelope before going wide. Schema documented in
+  // src/lib/integrations/creatio.ts (CreatioCredentials).
+  integrations Json?
 
   users          User[]
   rateCardItems  RateCardItem[]
@@ -355,7 +361,7 @@ model Tracker {
   tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   ownerId       String
   name          String
-  // microsoft | smb | smc | ent_ps | sales_rep | funding | other
+  // microsoft | smb | smc | ent_ps | sales_rep | funding | creatio | other
   source        String
   fieldMapping  Json
   statusMapping Json?
@@ -364,6 +370,10 @@ model Tracker {
   // is all FY26 carry-over" once instead of tagging every row.
   // carry_over | new_target | existing_customer | net_new | unknown
   defaultOriginKind String? @default("unknown")
+  // What kind of data is in this tracker — drives the "learn from history vs.
+  // plan future" framing on the pipeline page + Business dashboard.
+  // historical_pipeline | target_pipeline | current_pipe | funding | crm_sync | other
+  purpose       String?   @default("current_pipe")
   lastSyncAt    DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt

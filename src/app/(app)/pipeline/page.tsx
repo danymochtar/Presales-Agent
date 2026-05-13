@@ -146,6 +146,7 @@ export default async function PipelinePage() {
                 id={t.id}
                 name={t.name}
                 source={t.source}
+                purpose={t.purpose}
                 count={t.opportunities.length}
                 lastSyncAt={t.lastSyncAt ? t.lastSyncAt.toISOString() : null}
               />

@@ -38,6 +38,7 @@ export default async function TrackersIndexPage() {
               id={t.id}
               name={t.name}
               source={t.source}
+              purpose={t.purpose}
               count={t._count.opportunities}
               lastSyncAt={t.lastSyncAt ? t.lastSyncAt.toISOString() : null}
             />
