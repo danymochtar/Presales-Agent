@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -23,6 +24,7 @@ import {
   type McemPhase,
 } from "@/lib/mcem";
 import { customerNamesMatch } from "@/lib/pipeline/customer-match";
+import { isFiscalYearConfig, fyQuarterLabel, type FiscalYearConfig } from "@/lib/fiscal-year";
 
 const deliverableLabel = (dbType: string): string => {
   const k = kindOfDbType(dbType);
@@ -41,9 +43,15 @@ export default async function DashboardPage() {
   const session = await auth.api.getSession({ headers: await headers() });
   const { user, tenant } = await requireSessionAndTenant(session!.user.id);
 
+  // First-login gate: the dashboard pivots every KPI off a fiscal calendar +
+  // a master customer list. Until both are defined, ship the user to /setup.
+  const fy: FiscalYearConfig | null = isFiscalYearConfig(tenant.fiscalYear) ? tenant.fiscalYear : null;
+  const trackerCount = await prisma.tracker.count({ where: { tenantId: tenant.id } });
+  if (!fy || trackerCount === 0) redirect("/setup");
+
   const SEVEN_DAYS_AGO = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
-  const [engagements, recentDeliverables, opportunities, rateCount, catalogCount, patternCount, trackerCount, templateCount] = await Promise.all([
+  const [engagements, recentDeliverables, opportunities, rateCount, catalogCount, patternCount, templateCount] = await Promise.all([
     prisma.engagement.findMany({
       where: { tenantId: tenant.id },
       orderBy: { updatedAt: "desc" },
@@ -65,7 +73,6 @@ export default async function DashboardPage() {
     prisma.rateCardItem.count({ where: { tenantId: tenant.id } }),
     prisma.serviceCatalogItem.count({ where: { tenantId: tenant.id } }),
     prisma.learnedPattern.count({ where: { tenantId: tenant.id, active: true } }),
-    prisma.tracker.count({ where: { tenantId: tenant.id } }),
     prisma.template.count({ where: { tenantId: tenant.id, status: "active" } }),
   ]);
 
@@ -135,8 +142,11 @@ export default async function DashboardPage() {
         <CardContent className="p-5 md:p-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-xs uppercase tracking-wider text-primary font-semibold">
-                Welcome back{firstName ? `, ${firstName}` : ""}
+              <p className="text-xs uppercase tracking-wider text-primary font-semibold flex items-center gap-2 flex-wrap">
+                <span>Welcome back{firstName ? `, ${firstName}` : ""}</span>
+                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] tracking-normal font-medium">
+                  {fyQuarterLabel(fy, new Date())}
+                </span>
               </p>
               <h1 className="text-2xl md:text-3xl font-semibold mt-1 leading-tight">
                 Your unified multicloud presales workspace.

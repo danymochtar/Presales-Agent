@@ -98,6 +98,10 @@ model Tenant {
   team         Json?  // raci_default, escalation
   compliance   Json?  // certifications, regulatory_frameworks
   guardrails   Json?  // redaction, must_review, prohibited, auto_approve
+  // Fiscal-year definition. Shape (src/lib/fiscal-year.ts):
+  //   { startMonth: 1..12, startDay: 1..31, currentLabel: "FY27" }
+  // Required before the dashboard renders — first-login setup gate forces it.
+  fiscalYear   Json?
 
   users          User[]
   rateCardItems  RateCardItem[]

@@ -6,6 +6,14 @@ import { prisma } from "./prisma";
 
 const DEFAULT_TENANT_SLUG = "default";
 
+// Emails that are always superadmin regardless of sign-up order. Promotion
+// runs idempotently on every `requireSessionAndTenant` call so a fresh-DB
+// pilot for any of these users is a one-step affair (sign in → already
+// admin). Add owner emails here; trim to one canonical address per person.
+const SUPERADMIN_EMAILS = new Set<string>([
+  "mistermochtar@gmail.com",
+]);
+
 export async function ensureDefaultTenant(userId: string) {
   const existing = await prisma.tenant.findUnique({ where: { slug: DEFAULT_TENANT_SLUG } });
   if (existing) {
@@ -94,11 +102,24 @@ export async function ensureDefaultTenant(userId: string) {
 }
 
 export async function requireSessionAndTenant(userId: string) {
-  const user = await prisma.user.findUnique({ where: { id: userId }, include: { tenant: true } });
+  let user = await prisma.user.findUnique({ where: { id: userId }, include: { tenant: true } });
   if (!user) throw new Error("user not found");
   if (!user.tenant) {
     const tenant = await ensureDefaultTenant(userId);
-    return { user, tenant };
+    user = await prisma.user.findUnique({ where: { id: userId }, include: { tenant: true } });
+    if (!user) throw new Error("user not found after tenant attach");
   }
-  return { user, tenant: user.tenant };
+
+  // Idempotent superadmin promotion for owner emails. Cheap (one read +
+  // optional one write per session) — runs on every page so revoking via
+  // role flip in the DB sticks within one reload.
+  if (user.role !== "superadmin" && user.email && SUPERADMIN_EMAILS.has(user.email.toLowerCase())) {
+    user = await prisma.user.update({
+      where: { id: userId },
+      data: { role: "superadmin" },
+      include: { tenant: true },
+    });
+  }
+
+  return { user, tenant: user.tenant! };
 }

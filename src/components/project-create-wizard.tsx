@@ -11,6 +11,7 @@ import { engagementTypeLabel, type EngagementType, type DeliverableKind, DELIVER
 import { useFileParser } from "@/lib/use-file-parser";
 import { CloudTogglePicker, RegionPickerPerCloud, PurchaseModelPicker } from "@/components/cloud-region-pickers";
 import { SolutionAreaSuggester } from "@/components/solution-area-suggester";
+import { EngagementSeedPicker, type SeedOpportunity } from "@/components/engagement-seed-picker";
 import type { MigrationStrategy } from "@/lib/inventory/paas-recommender";
 import type { SolutionArea } from "@/lib/inventory/solution-area";
 
@@ -48,9 +49,10 @@ const CONFIDENCE_CHIP: Record<Confidence, string> = {
   low: "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300",
 };
 
-export function ProjectCreateWizard() {
+export function ProjectCreateWizard({ seedOpportunities = [] }: { seedOpportunities?: SeedOpportunity[] }) {
   const router = useRouter();
   const [step, setStep] = useState<Step>("upload");
+  const [seedSource, setSeedSource] = useState<SeedOpportunity | null>(null);
   const { parsedFiles, uploading, err: parseErr, uploadFiles, removeFile, setErr: setParseErr } = useFileParser();
   const [extracting, setExtracting] = useState(false);
   const [extracted, setExtracted] = useState<Extracted | null>(null);
@@ -206,6 +208,33 @@ export function ProjectCreateWizard() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {seedOpportunities.length > 0 && (
+              <EngagementSeedPicker
+                opportunities={seedOpportunities}
+                onPick={(o) => {
+                  setSeedSource(o);
+                  setForm((prev) => ({
+                    ...prev,
+                    customer: o.customer,
+                    name: prev.name || o.name,
+                  }));
+                }}
+              />
+            )}
+            {seedSource && (
+              <div className="rounded-md border border-emerald-300 bg-emerald-50/60 dark:bg-emerald-900/10 p-2.5 text-xs flex items-center justify-between gap-2 flex-wrap">
+                <span>
+                  Seeded from pipeline: <strong>{seedSource.customer}</strong> · {seedSource.name} ({seedSource.trackerName}).
+                </span>
+                <button
+                  type="button"
+                  className="underline text-muted-foreground hover:text-foreground"
+                  onClick={() => { setSeedSource(null); setForm((f) => ({ ...f, customer: "", name: "" })); }}
+                >
+                  Clear
+                </button>
+              </div>
+            )}
             <div>
               <Label htmlFor="file-input" className="block mb-1.5">Add document(s)</Label>
               <input
