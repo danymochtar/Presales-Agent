@@ -36,6 +36,7 @@ const DELIVERABLE_DEFS: Array<{
   groupLabel: string;
 }> = [
   { type: "assessment",     title: "Assessment",      desc: "Customer background + full-stack readiness — exec summary, infra / platform / app / DB",  basePath: (id) => `/engagements/${id}/assessment`,     showCloud: true,  group: "discover", groupLabel: "Discover" },
+  { type: "landing_zone",   title: "Landing zone",    desc: "Pick components per Azure CAF / AWS LZA / GCP Cloud Foundation across infra, app platform, data/AI archetypes",  basePath: (id) => `/engagements/${id}/landing-zone`,  showCloud: false, group: "design",   groupLabel: "Design" },
   { type: "architecture",   title: "Architecture",    desc: "Target landing zone + Mermaid diagrams",                     basePath: (id) => `/engagements/${id}/architecture`,   showCloud: true,  group: "design",   groupLabel: "Design" },
   { type: "bom",                   title: "BOM",                   desc: "Cloud consumption only — Azure / AWS / GCP line items",     basePath: (id) => `/engagements/${id}/bom`,                   showCloud: true,  group: "commercial", groupLabel: "Commercial" },
   { type: "professional_services", title: "Professional services", desc: "Implementation mandays × rate card × margin",               basePath: (id) => `/engagements/${id}/professional-services`, showCloud: true,  group: "commercial", groupLabel: "Commercial" },

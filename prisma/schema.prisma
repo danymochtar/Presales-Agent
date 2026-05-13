@@ -228,6 +228,12 @@ model Engagement {
   engagementTypeRationale  String? // 1-2 sentence why
   // Ordered list of deliverable types AI recommends for this engagement
   suggestedDeliverables  String[] @default([])
+  // Landing-zone picker selection. Shape defined in
+  // src/lib/landing-zone/picker.ts (EngagementLandingZoneJson):
+  // { archetypes: ["infra" | "platform" | "data_ai"],
+  //   selectionsByCloud: { [cloud]: string[] /* component names */ },
+  //   updatedAt: ISO }
+  landingZone     Json?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
