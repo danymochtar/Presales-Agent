@@ -33,26 +33,24 @@ export default function HelpPage() {
           <CardTitle className="text-base">Where to start</CardTitle>
           <CardDescription>Two entry points on the dashboard. Pick whichever matches your ask.</CardDescription>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+        <CardContent className="text-sm space-y-2">
           <div className="rounded-md border p-3 space-y-2">
-            <div className="font-medium">A. Full project</div>
+            <div className="font-medium">Create a new engagement</div>
             <p className="text-muted-foreground">
-              Upload every customer document you have (RFP, RVTools, Azure Migrate, meeting notes).
-              The agent classifies the engagement type, recommends a deliverable flow, then runs the
-              pipeline end-to-end.
+              Two steps. <strong className="text-foreground">Step 1</strong> — drop the customer documents you have
+              (RFP, RVTools, Azure Migrate, meeting notes). The agent extracts customer + scope + cloud + segment
+              + compliance posture and creates the engagement. <strong className="text-foreground">Step 2</strong>
+              — open the engagement at any time to generate a single deliverable (BOM only, SOW only, etc.) or the
+              full guided pipeline. Generate one now, more later.
             </p>
-            <p className="text-xs"><strong>Use when:</strong> working a real deal from Discover through SOW.</p>
-            <Link href="/engagements/new" className="inline-block text-xs underline">→ /projects/new</Link>
+            <p className="text-xs"><strong>Use when:</strong> any new customer opportunity — single document or end-to-end.</p>
+            <Link href="/engagements/new" className="inline-block text-xs underline">→ /engagements/new</Link>
           </div>
-          <div className="rounded-md border p-3 space-y-2">
-            <div className="font-medium">B. Quick generate</div>
-            <p className="text-muted-foreground">
-              Pick ONE deliverable (BOM only, SOW only, etc.). Supply just its prerequisites and get the
-              document. Creates a &ldquo;Quick: …&rdquo; project in your list for the audit trail.
-            </p>
-            <p className="text-xs"><strong>Use when:</strong> you only need one document, want to test an output format, or are turning an existing scope into a quick proposal.</p>
-            <Link href="/quick" className="inline-block text-xs underline">→ /quick</Link>
-          </div>
+          <p className="text-xs text-muted-foreground">
+            The engagement auto-links to a row in the <Link href="/pipeline" className="underline">Pipeline tracker</Link> by
+            customer name and reuses reference docs uploaded to the <Link href="/library" className="underline">Reference library</Link>,
+            so you don&apos;t re-upload material the agent already has.
+          </p>
         </CardContent>
       </Card>
 
@@ -72,23 +70,10 @@ export default function HelpPage() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Step-by-step: Quick generate</CardTitle></CardHeader>
-        <CardContent>
-          <ol className="text-sm space-y-2 list-decimal pl-5">
-            <li>From the dashboard click <strong>Quick generate one document</strong>.</li>
-            <li>Pick a deliverable from the grid — each card shows &ldquo;Needs: …&rdquo;.</li>
-            <li>The form renders only the fields that deliverable actually needs (customer, scope, inventory upload, cloud, region, purchase model, on-prem baseline — depending on selection).</li>
-            <li>Click <strong>Generate</strong>. Output streams in real time and you&apos;re redirected to the deliverable page when it finishes.</li>
-            <li>A &ldquo;Quick: …&rdquo; project appears in the Projects list. You can promote it into a full project later by uploading more documents and generating additional deliverables.</li>
-          </ol>
-        </CardContent>
-      </Card>
-
-      <Card>
         <CardHeader>
           <CardTitle className="text-base">What does each deliverable need?</CardTitle>
           <CardDescription>
-            Used by both the Quick wizard and the Full pipeline to know what to ask for.
+            Used by the engagement wizard + per-deliverable cards to know what to ask for.
             This table is rendered straight from the catalog so it stays in sync with the code.
           </CardDescription>
         </CardHeader>
@@ -190,7 +175,7 @@ export default function HelpPage() {
             <li><strong>Training mode:</strong> on the engagement detail page, switch to <em>training</em>. After generating and giving feedback, the agent extracts rules into <Link href="/settings/patterns" className="underline">Custom rules</Link>, which then auto-apply to production engagements.</li>
             <li><strong>Default region:</strong> Malaysia West (Azure) + ap-southeast-5 (AWS). The dropdown lists the full SEA + APAC + US/EU catalog.</li>
             <li><strong>Assessment opens with customer background:</strong> the Executive Summary now does the industry + IT-landscape research that the old standalone Customer Study used to produce. Upload an RFP / notes / public profile and the agent stitches that into Section 1 before scoring readiness. The Proposal reuses the same background when an Assessment is present, or does its own research when running standalone.</li>
-            <li><strong>Quick projects can be promoted:</strong> add more uploads or generate more deliverables on the same project to turn it into a full engagement — no need to start over.</li>
+            <li><strong>Start small, grow later:</strong> an engagement doesn&apos;t need every deliverable on day one. Create it with whatever data you have, generate one document now, add more uploads + deliverables later. The engagement detail page lets you generate any single card on demand.</li>
             <li><strong>Stuck on naming?</strong> <Link href="/services" className="underline">Services mapping</Link> lists Azure / AWS / GCP equivalents side-by-side across compute, storage, network, database, security, AI, analytics, and more — with explicit gaps where a cloud has no first-party offering.</li>
             <li><strong>Funding programs (Azure Accelerate / AWS MAP / GCP RaMP)</strong> are encoded in <code>src/lib/funding/programs.ts</code>. Once an engagement has a BOM, the engagement detail page shows the top eligible payout as a green chip and the proposal includes a Funding capture section. Refresh the catalog quarterly when MCI / MAP / RaMP terms change.</li>
             <li><strong><Link href="/pipeline" className="underline">Pipeline tracker</Link>:</strong> consolidates every source tracker (Microsoft biweekly, SMB / SMC / ENT-PS, sales-rep pipes, funding programs) into one view. Upload each source Excel once, map its columns onto the canonical opportunity shape (auto-detected for the common headers), and the consolidated KPI strip rolls up Committed / Upside / At Risk + closing-this-month / quarter. Use the quick-note column to record follow-up notes — typing &quot;at risk&quot;, &quot;won&quot;, &quot;lost&quot;, &quot;upside&quot;, &quot;follow up&quot; or &quot;pending consent&quot; in the note auto-flips the row&apos;s status. Export back to Excel any time to hand to finance or your boss.</li>
@@ -204,7 +189,7 @@ export default function HelpPage() {
           <ul className="text-sm space-y-1.5 list-disc pl-5">
             <li><strong>&ldquo;no workloads&rdquo;</strong> when generating BOM / Assessment / TCO: upload an inventory first (RVTools .xlsx, or a CSV with CPU + RAM + disk + OS columns). If parsing misses anything, click <em>extract workloads</em> in the Inputs section — the agent will try to extract them from the document text.</li>
             <li><strong>&ldquo;Stream interrupted&rdquo;</strong> mid-generation: the Vercel function timed out at 60s. Click Generate again — the prompt cache hits on retry so the rerun is fast.</li>
-            <li><strong>SOW needs a BOM first:</strong> server-enforced. Quick generate handles this for you (it pipelines BOM → SOW). If you&apos;re using the Full pipeline, generate the BOM for the same cloud first.</li>
+            <li><strong>SOW needs a BOM first:</strong> server-enforced. Generate the BOM for the target cloud on the engagement page before kicking off the SOW.</li>
             <li><strong>&ldquo;Load failed&rdquo; (iOS Safari):</strong> a network blip during streaming. Retry. If it keeps happening, generate from the Workflow pipeline button — it&apos;s more tolerant of reconnects.</li>
             <li><strong>Output truncated:</strong> reduce scope (one cloud at a time, or split deliverables instead of compare mode).</li>
             <li><strong>RVTools warning on upload:</strong> the file chip shows &quot;Unknown collector&quot; if the <code>vMetaData</code> sheet is missing or the version predates the May 2025 supply-chain advisory. Re-export with the official Dell-hosted RVTools (robware.net / rvtools.com) and try again.</li>

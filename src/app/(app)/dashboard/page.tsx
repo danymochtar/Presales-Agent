@@ -159,23 +159,15 @@ export default async function DashboardPage() {
         </CardContent>
       </Card>
 
-      {/* ───────── 3-tile action row ───────── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      {/* ───────── 2-tile action row ───────── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <ActionTile
           href="/engagements/new"
-          tag="Full engagement"
-          title="Create a new engagement →"
+          tag="New engagement"
+          title="Capture customer data →"
           icon="⇉"
-          body="Drop customer documents → the agent classifies the engagement type + recommends deliverables → run the guided pipeline."
-          useWhen="Use for a real opportunity end-to-end."
-        />
-        <ActionTile
-          href="/quick"
-          tag="Quick generate"
-          title="One document in 60 seconds →"
-          icon="⚡"
-          body="Already have inventory or scope? Generate a single BOM / Architecture / SOW / Proposal / TCO without setting up the full engagement."
-          useWhen="Use when you only need one document fast."
+          body="Drop customer documents → the agent extracts customer + scope + cloud and creates the engagement. Generate any deliverable (BOM / Architecture / SOW / Proposal / TCO) from the engagement page whenever you need it — one at a time or the full guided pipeline."
+          useWhen="Every new customer opportunity starts here."
         />
         <ActionTile
           href="/pipeline"

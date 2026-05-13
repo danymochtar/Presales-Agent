@@ -3,7 +3,8 @@ import { headers } from "next/headers";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { MCEM_ITEMS, type Mcem, type McemItemKey } from "@/lib/mcem";
+import { MCEM_ITEMS, getItem, type Mcem, type McemItemKey } from "@/lib/mcem";
+import { syncEngagementToPipeline } from "@/lib/pipeline/sync";
 
 export const runtime = "nodejs";
 
@@ -53,5 +54,15 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     where: { id },
     data: { mcem: next as object },
   });
+
+  // When a checklist item flips from undone → done (or back), stamp every
+  // matched pipeline opportunity with what changed. Skip note-only edits to
+  // avoid noisy sync traffic.
+  if (done !== undefined && done !== (before.done ?? false)) {
+    const label = getItem(key)?.label ?? key;
+    const activity = done ? `MCEM ✓ ${label}` : `MCEM unchecked ${label}`;
+    void syncEngagementToPipeline(id, activity).catch(() => undefined);
+  }
+
   return NextResponse.json({ mcem: next });
 }

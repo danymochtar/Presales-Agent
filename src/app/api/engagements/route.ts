@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireSessionAndTenant } from "@/lib/tenant";
 import { MARKET_DEFAULT_REGIONS } from "@/lib/pricing/regions";
 import type { CloudType } from "@/lib/pricing/types";
+import { syncEngagementToPipeline } from "@/lib/pipeline/sync";
 
 const CloudEnum = z.enum(["azure", "aws", "gcp"]);
 
@@ -104,6 +105,10 @@ export async function POST(req: NextRequest) {
     }
     return created;
   });
+
+  // Best-effort: stamp every matched pipeline opportunity with the new
+  // engagement. Never blocks the response.
+  void syncEngagementToPipeline(project.id, "engagement created").catch(() => undefined);
 
   return NextResponse.json({ project });
 }
