@@ -111,6 +111,8 @@ model Tenant {
   engagements    Engagement[]
   patterns       LearnedPattern[]
   trackers       Tracker[]
+  personnel      Personnel[]
+  businessTargets BusinessTarget[]
 }
 
 model RateCardItem {
@@ -398,6 +400,7 @@ model Opportunity {
   raw               Json
   engagementId      String?
   engagement        Engagement? @relation(fields: [engagementId], references: [id])
+  assignments       OpportunityAssignment[]
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
@@ -405,4 +408,88 @@ model Opportunity {
   @@index([status])
   @@index([originKind])
   @@index([closeDate])
+}
+
+// ---------- Team + Business targets (business-lead view) ----------
+// Personnel = a person on the team. Roles cover the typical multicloud
+// presales motion: Solution Architect, Solution Sales, Account Manager,
+// Business Lead, Partner Seller, plus a generic "other" escape hatch.
+// One person can carry multiple opportunities (via OpportunityAssignment);
+// one opportunity can have N people across roles (multiple SAs, multiple
+// sales, multiple AMs).
+model Personnel {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name         String
+  email        String?
+  // solution_architect | solution_sales | account_manager | business_lead |
+  // partner_seller | csm | other
+  role         String
+  // Optional segment ownership for filtering. SMB | SMC | ENT | PS | all | null
+  segment      String?
+  active       Boolean  @default(true)
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  assignments  OpportunityAssignment[]
+  targetsOwned BusinessTarget[]
+
+  @@index([tenantId, role])
+  @@index([tenantId, active])
+}
+
+// Join between Opportunity and Personnel — captures who is doing what on
+// each deal. `role` distinguishes SA vs Sales vs AM so one person showing
+// up twice on the same deal in two roles is allowed.
+model OpportunityAssignment {
+  id             String      @id @default(cuid())
+  opportunityId  String
+  opportunity    Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  personnelId    String
+  personnel      Personnel   @relation(fields: [personnelId], references: [id], onDelete: Cascade)
+  // solution_architect | solution_sales | account_manager | partner_seller | csm
+  role           String
+  createdAt      DateTime    @default(now())
+
+  @@unique([opportunityId, personnelId, role])
+  @@index([personnelId])
+}
+
+// A business target the team is measured against. The same metric can be
+// sliced multiple ways — total revenue Y-on-Y, per cloud, per product line,
+// per owner, per segment — by creating one BusinessTarget row per slice.
+// Adding / deleting a slice = adding / deleting a row, no schema migration
+// needed.
+model BusinessTarget {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // Fiscal year label, must match Tenant.fiscalYear.currentLabel format. "FY27".
+  fiscalYear  String
+  // Period within the FY. year | q1 | q2 | q3 | q4 | m01..m12
+  period      String   @default("year")
+  // What's being measured. revenue | cost | gross_margin_pct | deal_count |
+  // win_rate_pct | acr | csat | other (free-form via `notes`).
+  metric      String   @default("revenue")
+  // Scope axis 1 — cloud bucket. azure | aws | gcp | services | cross_cloud | all
+  cloud       String   @default("all")
+  // Scope axis 2 — free-form product key. "Azure IaaS" | "Data + AI" |
+  // "Managed Services" | etc. Null = aggregate across products.
+  productKey  String?
+  // Scope axis 3 — segment ownership. SMB | SMC | ENT | PS | all | null
+  segment     String?
+  // Scope axis 4 — owner. Null = team-wide target.
+  ownerId     String?
+  owner       Personnel? @relation(fields: [ownerId], references: [id])
+  // The number. USD for currency metrics, raw number for counts / percentages.
+  valueUsd    Decimal? @db.Decimal(14, 2)
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId, fiscalYear, period])
+  @@index([tenantId, cloud])
+  @@index([ownerId])
 }

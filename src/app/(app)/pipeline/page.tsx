@@ -10,6 +10,7 @@ import { TrackerCard } from "@/components/pipeline/tracker-card";
 import { StatusPill } from "@/components/pipeline/status-pill";
 import { OriginPill } from "@/components/pipeline/origin-pill";
 import { QuickNoteCell } from "@/components/pipeline/quick-note-cell";
+import { AssignmentChips, type AssignmentRow, type AssignablePerson } from "@/components/pipeline/assignment-chips";
 import { summarize, type PipelineOpportunityRow } from "@/lib/exporters/pipeline-xlsx";
 import type { PipelineStatus } from "@/lib/pipeline/status";
 import {
@@ -31,11 +32,40 @@ export default async function PipelinePage() {
   const session = await auth.api.getSession({ headers: await headers() });
   const { tenant } = await requireSessionAndTenant(session!.user.id);
 
-  const trackers = await prisma.tracker.findMany({
-    where: { tenantId: tenant.id },
-    orderBy: { updatedAt: "desc" },
-    include: { opportunities: { orderBy: { lastTouchedAt: "desc" } } },
-  });
+  const [trackers, personnel] = await Promise.all([
+    prisma.tracker.findMany({
+      where: { tenantId: tenant.id },
+      orderBy: { updatedAt: "desc" },
+      include: {
+        opportunities: {
+          orderBy: { lastTouchedAt: "desc" },
+          include: { assignments: { include: { personnel: { select: { id: true, name: true } } } } },
+        },
+      },
+    }),
+    prisma.personnel.findMany({
+      where: { tenantId: tenant.id, active: true },
+      orderBy: [{ role: "asc" }, { name: "asc" }],
+      select: { id: true, name: true, role: true },
+    }),
+  ]);
+  const assignablePeople: AssignablePerson[] = personnel.map((p) => ({ id: p.id, name: p.name, role: p.role }));
+
+  // Index assignments per opportunity for fast lookup at row render time.
+  const assignmentsByOpp = new Map<string, AssignmentRow[]>();
+  for (const t of trackers) {
+    for (const o of t.opportunities) {
+      assignmentsByOpp.set(
+        o.id,
+        o.assignments.map((a) => ({
+          id: a.id,
+          role: a.role,
+          personnelId: a.personnelId,
+          personnelName: a.personnel.name,
+        })),
+      );
+    }
+  }
 
   const allRows: PipelineOpportunityRow[] = trackers.flatMap((t) =>
     t.opportunities.map((o) => ({
@@ -171,6 +201,7 @@ export default async function PipelinePage() {
                     <th className="px-3 py-2 font-medium text-right">MYR</th>
                     <th className="px-3 py-2 font-medium">Close</th>
                     <th className="px-3 py-2 font-medium">Owner</th>
+                    <th className="px-3 py-2 font-medium min-w-[200px]">Team (SA · SS · AM)</th>
                     <th className="px-3 py-2 font-medium min-w-[220px]">Quick note</th>
                   </tr>
                 </thead>
@@ -188,6 +219,13 @@ export default async function PipelinePage() {
                       <td className="px-3 py-2 text-right tabular-nums">{fmtNum(r.valueMyr)}</td>
                       <td className="px-3 py-2 whitespace-nowrap">{fmtDate(r.closeDate)}</td>
                       <td className="px-3 py-2 text-muted-foreground">{r.ownerName ?? "—"}</td>
+                      <td className="px-3 py-2">
+                        <AssignmentChips
+                          opportunityId={r.id}
+                          assignments={assignmentsByOpp.get(r.id) ?? []}
+                          people={assignablePeople}
+                        />
+                      </td>
                       <td className="px-3 py-2"><QuickNoteCell opportunityId={r.id} initialNote={r.notes} /></td>
                     </tr>
                   ))}
