@@ -36,7 +36,7 @@ export function ComplianceForm({
     setSaving(true);
     setErr(null);
     try {
-      const res = await fetch(`/api/projects/${projectId}/compliance`, {
+      const res = await fetch(`/api/engagements/${projectId}/compliance`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -47,7 +47,7 @@ export function ComplianceForm({
         const j = await res.json().catch(() => ({}));
         throw new Error(typeof j.error === "string" ? j.error : "save failed");
       }
-      router.push(`/projects/${projectId}`);
+      router.push(`/engagements/${projectId}`);
       router.refresh();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "save failed");

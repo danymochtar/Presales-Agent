@@ -10,7 +10,7 @@ const Patch = z.object({
   description: z.string().nullable().optional(),
   status: z.enum(["active", "archived"]).optional(),
   cloudProvider: z.enum(["azure", "aws", "gcp"]).nullable().optional(),
-  projectType: z.enum(["migration", "greenfield", "modernization", "dr", "poc", "optimization"]).nullable().optional(),
+  engagementType: z.enum(["migration", "greenfield", "modernization", "dr", "poc", "optimization"]).nullable().optional(),
 });
 
 async function ensureOwn(tenantId: string, id: string) {

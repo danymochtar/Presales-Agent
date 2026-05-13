@@ -47,7 +47,7 @@ export function TrainingPanel({
     setMsg(null);
     setErr(null);
     try {
-      const res = await fetch(`/api/projects/${projectId}/training/extract`, {
+      const res = await fetch(`/api/engagements/${projectId}/training/extract`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -97,7 +97,7 @@ export function TrainingPanel({
     setPersisting(true);
     setErr(null);
     try {
-      const res = await fetch(`/api/projects/${projectId}/training/feedback`, {
+      const res = await fetch(`/api/engagements/${projectId}/training/feedback`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

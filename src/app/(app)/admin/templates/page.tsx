@@ -39,7 +39,7 @@ export default async function TemplatesPage() {
               id: t.id,
               type: t.type,
               cloudProvider: t.cloudProvider,
-              projectType: t.projectType,
+              engagementType: t.engagementType,
               name: t.name,
               description: t.description,
               originalName: t.originalName,

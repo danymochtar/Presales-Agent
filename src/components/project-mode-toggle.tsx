@@ -18,7 +18,7 @@ export function ProjectModeToggle({
     const next = mode === "production" ? "training" : "production";
     setPending(true);
     try {
-      const res = await fetch(`/api/projects/${projectId}`, {
+      const res = await fetch(`/api/engagements/${projectId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mode: next }),

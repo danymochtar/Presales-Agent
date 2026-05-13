@@ -8,7 +8,7 @@ type Template = {
   id: string;
   type: string;
   cloudProvider: string | null;
-  projectType: string | null;
+  engagementType: string | null;
   name: string | null;
   description: string | null;
   originalName: string | null;
@@ -89,8 +89,8 @@ export function TemplateList({ initial }: { initial: Template[] }) {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium break-words">{t.name ?? t.originalName ?? "Untitled template"}</span>
                       {t.cloudProvider && <CloudChip cloud={t.cloudProvider} size="xs" />}
-                      {t.projectType && (
-                        <span className="text-[10px] uppercase rounded px-1.5 py-0.5 bg-accent">{t.projectType}</span>
+                      {t.engagementType && (
+                        <span className="text-[10px] uppercase rounded px-1.5 py-0.5 bg-accent">{t.engagementType}</span>
                       )}
                       {t.status === "archived" && <span className="text-[10px] uppercase text-muted-foreground">archived</span>}
                     </div>

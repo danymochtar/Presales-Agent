@@ -186,7 +186,7 @@ export default async function UsagePage() {
         <CardContent>
           {recent.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No calls logged yet. Try generating a project from <Link className="underline" href="/projects/new">/projects/new</Link>.
+              No calls logged yet. Try generating a project from <Link className="underline" href="/engagements/new">/projects/new</Link>.
             </p>
           ) : (
             <div className="overflow-x-auto -mx-4 sm:-mx-6 px-4 sm:px-6">

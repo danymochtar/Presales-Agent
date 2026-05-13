@@ -25,8 +25,8 @@ const CLOUDS = [
   { value: "gcp", label: "GCP" },
 ];
 
-const PROJECT_TYPES = [
-  { value: "", label: "Any project type" },
+const ENGAGEMENT_TYPES = [
+  { value: "", label: "Any engagement type" },
   { value: "migration", label: "Migration" },
   { value: "greenfield", label: "Greenfield" },
   { value: "modernization", label: "Modernization" },
@@ -39,7 +39,7 @@ export function TemplateUploadForm() {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [pasted, setPasted] = useState("");
-  const [meta, setMeta] = useState({ type: "bom", name: "", description: "", cloudProvider: "", projectType: "" });
+  const [meta, setMeta] = useState({ type: "bom", name: "", description: "", cloudProvider: "", engagementType: "" });
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -61,14 +61,14 @@ export function TemplateUploadForm() {
       fd.append("name", meta.name);
       if (meta.description) fd.append("description", meta.description);
       if (meta.cloudProvider) fd.append("cloudProvider", meta.cloudProvider);
-      if (meta.projectType) fd.append("projectType", meta.projectType);
+      if (meta.engagementType) fd.append("engagementType", meta.engagementType);
       const res = await fetch("/api/admin/templates", { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : "upload failed");
       setMsg(`Saved "${data.template.name}" (${data.template.type}).`);
       setFile(null);
       setPasted("");
-      setMeta({ type: "bom", name: "", description: "", cloudProvider: "", projectType: "" });
+      setMeta({ type: "bom", name: "", description: "", cloudProvider: "", engagementType: "" });
       const input = document.getElementById("tpl-file") as HTMLInputElement | null;
       if (input) input.value = "";
       router.refresh();
@@ -109,14 +109,14 @@ export function TemplateUploadForm() {
           </select>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="tpl-ptype">Applies to project type (optional)</Label>
+          <Label htmlFor="tpl-ptype">Applies to engagement type (optional)</Label>
           <select
             id="tpl-ptype"
-            value={meta.projectType}
-            onChange={(e) => setMeta({ ...meta, projectType: e.target.value })}
+            value={meta.engagementType}
+            onChange={(e) => setMeta({ ...meta, engagementType: e.target.value })}
             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
           >
-            {PROJECT_TYPES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+            {ENGAGEMENT_TYPES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
           </select>
         </div>
       </div>

@@ -1,6 +1,6 @@
 // SSE event-stream reader shared by every "generate" caller (smart-workflow,
 // deliverable-workspace, quick-generate-wizard). Consumes the
-// `data: {...}\n\n` framing produced by every /api/projects/.../generate
+// `data: {...}\n\n` framing produced by every /api/engagements/.../generate
 // route and dispatches delta / done / error to the caller.
 
 export type StreamCallbacks = {

@@ -16,7 +16,7 @@ export default async function AdminOverviewPage() {
       },
     }),
     prisma.user.count({ where: { tenantId: ctx.tenant.id } }),
-    prisma.project.count({ where: { tenantId: ctx.tenant.id } }),
+    prisma.engagement.count({ where: { tenantId: ctx.tenant.id } }),
   ]);
 
   return (

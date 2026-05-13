@@ -18,6 +18,41 @@ export const MEDDPICC_FIELDS: { key: MeddpiccField; label: string; help: string 
   { key: "competition",      label: "Competition",        help: "Named competitors / in-house build / status-quo — and your reframe per competitor." },
 ];
 
+// Presales funnel. Once an engagement closes won it's colloquially a "project"
+// to the team — but the stage stays in this enum for unified reporting.
+export type EngagementStage =
+  | "prospecting"
+  | "qualifying"
+  | "discovery"
+  | "proposed"
+  | "negotiating"
+  | "closed_won"
+  | "closed_lost";
+
+export const ENGAGEMENT_STAGES: EngagementStage[] = [
+  "prospecting", "qualifying", "discovery", "proposed",
+  "negotiating", "closed_won", "closed_lost",
+];
+
+export const STAGE_LABELS: Record<EngagementStage, string> = {
+  prospecting:  "Prospecting",
+  qualifying:   "Qualifying",
+  discovery:    "Discovery",
+  proposed:     "Proposed",
+  negotiating:  "Negotiating",
+  closed_won:   "Closed Won",
+  closed_lost:  "Closed Lost",
+};
+
+export function stageLabel(stage: string | null | undefined): string {
+  if (!stage) return "—";
+  return STAGE_LABELS[stage as EngagementStage] ?? stage;
+}
+
+export function isOpenStage(stage: string | null | undefined): boolean {
+  return stage !== "closed_won" && stage !== "closed_lost";
+}
+
 export type Confidence = "high" | "medium" | "low";
 
 export type MeddpiccEntry = {
@@ -37,13 +72,15 @@ export function emptyMeddpicc(): Meddpicc {
 const CONFIDENCE_WEIGHT: Record<Confidence, number> = { high: 1.0, medium: 0.6, low: 0.3 };
 
 // Stage-aware weights. As a deal progresses, certain fields become essential.
-// "stage" is the Project.stage enum value.
-const STAGE_WEIGHTS: Record<string, Partial<Record<MeddpiccField, number>>> = {
-  draft:     { identifyPain: 1.5, metrics: 1.2 },
-  pending:   { economicBuyer: 1.5, decisionProcess: 1.3, paperProcess: 1.2, champion: 1.2 },
-  won:       { metrics: 1.3, paperProcess: 1.3 },
-  lost:      {},
-  graduated: {},
+// "stage" is the Engagement.stage enum value (7-stage presales funnel).
+const STAGE_WEIGHTS: Record<EngagementStage, Partial<Record<MeddpiccField, number>>> = {
+  prospecting:  { identifyPain: 1.5, metrics: 1.2 },
+  qualifying:   { identifyPain: 1.5, metrics: 1.3, economicBuyer: 1.3, champion: 1.2 },
+  discovery:    { metrics: 1.3, decisionCriteria: 1.4, decisionProcess: 1.3, champion: 1.3 },
+  proposed:     { decisionProcess: 1.4, decisionCriteria: 1.3, paperProcess: 1.3, competition: 1.2 },
+  negotiating:  { economicBuyer: 1.5, decisionProcess: 1.4, paperProcess: 1.5, champion: 1.3, competition: 1.3 },
+  closed_won:   { metrics: 1.3, paperProcess: 1.3 },
+  closed_lost:  {},
 };
 
 export type FieldScore = {
@@ -63,7 +100,7 @@ export type DealHealth = {
 
 export function score(meddpicc: Meddpicc | null | undefined, stage: string | null | undefined): DealHealth {
   const m = meddpicc ?? emptyMeddpicc();
-  const stageWeights = STAGE_WEIGHTS[stage ?? "draft"] ?? {};
+  const stageWeights = STAGE_WEIGHTS[(stage as EngagementStage) ?? "prospecting"] ?? {};
   const now = Date.now();
   const fieldScores: FieldScore[] = MEDDPICC_FIELDS.map(({ key }) => {
     const e = m[key];

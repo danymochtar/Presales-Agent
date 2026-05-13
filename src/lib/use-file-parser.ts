@@ -32,7 +32,7 @@ export function useFileParser() {
         list.map(async (file) => {
           const fd = new FormData();
           fd.append("file", file);
-          const res = await fetch("/api/projects/extract/parse", { method: "POST", body: fd });
+          const res = await fetch("/api/engagements/extract/parse", { method: "POST", body: fd });
           const data = await res.json();
           if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : "parse failed");
           return data as ParsedFile;

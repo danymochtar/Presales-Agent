@@ -26,7 +26,7 @@ const Meta = z.object({
   name: z.string().min(2),
   description: z.string().optional(),
   cloudProvider: z.enum(["azure", "aws", "gcp"]).optional().nullable(),
-  projectType: z.enum(["migration", "greenfield", "modernization", "dr", "poc", "optimization"]).optional().nullable(),
+  engagementType: z.enum(["migration", "greenfield", "modernization", "dr", "poc", "optimization"]).optional().nullable(),
 });
 
 export async function POST(req: NextRequest) {
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     name: form.get("name"),
     description: form.get("description") || undefined,
     cloudProvider: (form.get("cloudProvider") as string) || null,
-    projectType: (form.get("projectType") as string) || null,
+    engagementType: (form.get("engagementType") as string) || null,
   };
   const parsed = Meta.safeParse(meta);
   if (!parsed.success) {
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
       name: parsed.data.name,
       description: parsed.data.description || null,
       cloudProvider: parsed.data.cloudProvider || null,
-      projectType: parsed.data.projectType || null,
+      engagementType: parsed.data.engagementType || null,
       originalName: originalName || null,
       mimeType: mimeType || null,
       textContent,

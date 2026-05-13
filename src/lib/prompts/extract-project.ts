@@ -81,7 +81,7 @@ You MAY adjust this list based on customer-specific signals — e.g. if the docs
 - keyRequirements / constraints: only items the customer wrote/said. Don't fabricate.
 - For Malaysian context, use Malaysian English (en-MY) phrasing.
 - Never invent a customer name. If doc content doesn't reveal it, customer=null.
-- projectTypeRationale: cite a specific phrase or signal from the docs (e.g. "RFP states '30 on-prem servers to migrate', and inventory contains RVTools export → migration").
+- engagementTypeRationale: cite a specific phrase or signal from the docs (e.g. "RFP states '30 on-prem servers to migrate', and inventory contains RVTools export → migration").
 
 # Examples (one-shot)
 

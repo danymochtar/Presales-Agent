@@ -7,9 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CloudChip } from "@/components/cloud-chip";
 
-import { projectTypeLabel, DELIVERABLE_PREREQS, kindOfDbType } from "@/lib/deliverable-prereqs";
+import { engagementTypeLabel, DELIVERABLE_PREREQS, kindOfDbType } from "@/lib/deliverable-prereqs";
 import { relTime } from "@/lib/format-time";
-import { score as meddpiccScore, healthBand, type Meddpicc } from "@/lib/meddpicc";
+import { score as meddpiccScore, healthBand, type Meddpicc, stageLabel, isOpenStage } from "@/lib/meddpicc";
 
 const STAGE_TYPES = ["assessment", "architecture", "bom", "tco", "project_plan", "proposal"];
 
@@ -23,7 +23,7 @@ export default async function DashboardPage() {
   const { user, tenant } = await requireSessionAndTenant(session!.user.id);
 
   const [projects, recentDeliverables, rateCount, catalogCount, patternCount] = await Promise.all([
-    prisma.project.findMany({
+    prisma.engagement.findMany({
       where: { tenantId: tenant.id },
       orderBy: { updatedAt: "desc" },
       include: {
@@ -32,18 +32,18 @@ export default async function DashboardPage() {
       },
     }),
     prisma.deliverable.findMany({
-      where: { project: { tenantId: tenant.id } },
+      where: { engagement: { tenantId: tenant.id } },
       orderBy: { createdAt: "desc" },
       take: 12,
-      include: { project: { select: { id: true, name: true } } },
+      include: { engagement: { select: { id: true, name: true } } },
     }),
     prisma.rateCardItem.count({ where: { tenantId: tenant.id } }),
     prisma.serviceCatalogItem.count({ where: { tenantId: tenant.id } }),
     prisma.learnedPattern.count({ where: { tenantId: tenant.id, active: true } }),
   ]);
 
-  const activeProjects = projects.filter((p) => p.stage === "draft" || p.stage === "pending");
-  const wonProjects = projects.filter((p) => p.stage === "won");
+  const activeEngagements = projects.filter((p) => isOpenStage(p.stage));
+  const wonEngagements = projects.filter((p) => p.stage === "closed_won");
   const totalDeliverables = projects.reduce((s, p) => s + p.deliverables.length, 0);
   const totalBoms = projects.reduce(
     (s, p) => s + p.deliverables.filter((d) => d.type === "bom").length,
@@ -76,9 +76,6 @@ export default async function DashboardPage() {
             Welcome back{firstName ? `, ${firstName}` : ""}.
           </h1>
           <p className="text-sm text-muted-foreground">
-            {tenant.country} · {tenant.currency}
-            {tenant.fxMyrPerUsd ? ` · FX MYR/USD ${tenant.fxMyrPerUsd}` : ""}
-            {" · "}
             <Link href="/help" className="underline hover:text-foreground">First time? Open the guide</Link>
           </p>
         </div>
@@ -86,21 +83,22 @@ export default async function DashboardPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <Link
-          href="/projects/new"
+          href="/engagements/new"
           className="rounded-lg border bg-card p-4 hover:border-primary hover:shadow-sm transition group"
         >
           <div className="flex items-start justify-between gap-2">
             <div>
-              <div className="text-xs uppercase tracking-wider text-muted-foreground">Full project</div>
-              <div className="text-base font-semibold mt-0.5 group-hover:text-primary">Start a new engagement →</div>
+              <div className="text-xs uppercase tracking-wider text-muted-foreground">Presales engagement</div>
+              <div className="text-base font-semibold mt-0.5 group-hover:text-primary">Create a new engagement →</div>
             </div>
             <span className="text-2xl leading-none text-muted-foreground group-hover:text-primary">⇉</span>
           </div>
           <p className="text-sm text-muted-foreground mt-2">
-            Drop any customer docs (RVTools, Azure Migrate, RFP, meeting notes). The agent classifies the
-            engagement and walks you through the recommended deliverable flow.
+            An engagement tracks one customer opportunity through its presales stages — prospecting, qualifying,
+            discovery, proposed, negotiating — until it closes won (becomes a project) or lost. Auto-links to a
+            pipeline opportunity by customer name when one exists.
           </p>
-          <p className="text-xs text-muted-foreground mt-2">Use when: end-to-end study → BOM → proposal → SOW.</p>
+          <p className="text-xs text-muted-foreground mt-2">Use when: new customer opportunity → end-to-end deliverables → close.</p>
         </Link>
 
         <Link
@@ -124,33 +122,33 @@ export default async function DashboardPage() {
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KpiCard label="Active projects" value={activeProjects.length} sublabel={`${wonProjects.length} won`} />
-        <KpiCard label="Total deliverables" value={totalDeliverables} sublabel="across all projects" />
+        <KpiCard label="Active engagements" value={activeEngagements.length} sublabel={`${wonEngagements.length} closed won`} />
+        <KpiCard label="Total deliverables" value={totalDeliverables} sublabel="across all engagements" />
         <KpiCard label="BOMs generated" value={totalBoms} sublabel="across all clouds" />
-        <KpiCard label="Documents uploaded" value={totalInputs} sublabel="across projects" />
+        <KpiCard label="Documents uploaded" value={totalInputs} sublabel="across engagements" />
       </div>
 
-      {/* Active projects */}
+      {/* Active engagements */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>Active projects</span>
-            {activeProjects.length > 0 && (
-              <Link href="/projects" className="text-xs font-normal text-muted-foreground hover:text-foreground">
+            <span>Active engagements</span>
+            {activeEngagements.length > 0 && (
+              <Link href="/engagements" className="text-xs font-normal text-muted-foreground hover:text-foreground">
                 View all →
               </Link>
             )}
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {activeProjects.length === 0 ? (
+          {activeEngagements.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No active projects yet. <Link href="/projects/new" className="underline">Create one</Link> by uploading customer documents — the agent will classify the engagement and recommend a deliverable flow.
+              No active engagements yet. <Link href="/engagements/new" className="underline">Create one</Link> by uploading customer documents — the agent will classify the engagement and recommend a deliverable flow.
             </p>
           ) : (
             <ul className="divide-y">
               {progressByProject
-                .filter(({ project }) => project.stage === "draft" || project.stage === "pending")
+                .filter(({ project }) => isOpenStage(project.stage))
                 .slice(0, 5)
                 .map(({ project, completed, total }) => {
                   const targetClouds = ((project.targetClouds as string[] | null) ?? ["azure"]).filter((c) => c !== "gcp");
@@ -158,15 +156,15 @@ export default async function DashboardPage() {
                     <li key={project.id} className="py-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
-                          <Link href={`/projects/${project.id}`} className="font-medium hover:underline truncate inline-block max-w-full">
+                          <Link href={`/engagements/${project.id}`} className="font-medium hover:underline truncate inline-block max-w-full">
                             {project.name}
                           </Link>
                           <p className="text-xs text-muted-foreground mt-0.5">
                             {project.customer}
                             {project.industry && ` · ${project.industry}`}
                             {project.customerSegment && ` · ${project.customerSegment}`}
-                            {project.projectType && project.projectType !== "unknown" && (
-                              <span className="ml-1 text-foreground">· {projectTypeLabel(project.projectType)}</span>
+                            {project.engagementType && project.engagementType !== "unknown" && (
+                              <span className="ml-1 text-foreground">· {engagementTypeLabel(project.engagementType)}</span>
                             )}
                           </p>
                           <div className="flex items-center gap-3 mt-2 flex-wrap">
@@ -194,7 +192,7 @@ export default async function DashboardPage() {
                           </div>
                         </div>
                         <Button asChild variant="outline" size="sm" className="shrink-0">
-                          <Link href={`/projects/${project.id}`}>Continue →</Link>
+                          <Link href={`/engagements/${project.id}`}>Continue →</Link>
                         </Button>
                       </div>
                     </li>
@@ -217,7 +215,7 @@ export default async function DashboardPage() {
             ) : (
               <ul className="space-y-2 text-sm">
                 {recentDeliverables.map((d, i) => (
-                  <li key={`${d.project.id}-${d.type}-${i}`} className="flex justify-between gap-3">
+                  <li key={`${d.engagement.id}-${d.type}-${i}`} className="flex justify-between gap-3">
                     <span className="min-w-0">
                       <span className="text-muted-foreground">Generated </span>
                       <span className="font-medium">{deliverableLabel(d.type)}</span>
@@ -227,8 +225,8 @@ export default async function DashboardPage() {
                         </span>
                       )}
                       <span className="text-muted-foreground"> for </span>
-                      <Link href={`/projects/${d.project.id}`} className="hover:underline">
-                        {d.project.name}
+                      <Link href={`/engagements/${d.engagement.id}`} className="hover:underline">
+                        {d.engagement.name}
                       </Link>
                     </span>
                     <span className="text-xs text-muted-foreground shrink-0">{relTime(d.createdAt)}</span>

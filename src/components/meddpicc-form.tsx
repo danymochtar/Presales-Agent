@@ -54,7 +54,7 @@ export function MeddpiccForm({
       const body = Object.fromEntries(
         MEDDPICC_FIELDS.map(({ key }) => [key, { value: data[key].value, confidence: data[key].confidence }]),
       );
-      const res = await fetch(`/api/projects/${projectId}/meddpicc`, {
+      const res = await fetch(`/api/engagements/${projectId}/meddpicc`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

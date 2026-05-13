@@ -12,7 +12,7 @@ export function ExtractWorkloadsButton({ projectId, inputId }: { projectId: stri
     setLoading(true);
     setErr(null);
     try {
-      const res = await fetch(`/api/projects/${projectId}/inputs/${inputId}/extract-workloads`, { method: "POST" });
+      const res = await fetch(`/api/engagements/${projectId}/inputs/${inputId}/extract-workloads`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : "extract failed");
       router.refresh();

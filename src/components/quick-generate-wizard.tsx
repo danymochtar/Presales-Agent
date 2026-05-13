@@ -201,7 +201,7 @@ export function QuickGenerateWizard() {
       });
       const createData = await createRes.json();
       if (!createRes.ok) throw new Error(typeof createData.error === "string" ? createData.error : "could not create project");
-      const projectId = createData.project.id as string;
+      const projectId = createData.engagement.id as string;
 
       const cloudQS: CloudType = cloudsForProject[0];
       for (let i = 0; i < stagesToRun.length; i++) {
@@ -210,9 +210,9 @@ export function QuickGenerateWizard() {
         if (stagesToRun.length > 1) {
           setRunText((t) => t + (t ? "\n\n" : "") + `## Generating ${DELIVERABLE_PREREQS[stage].label}…\n\n`);
         }
-        await streamGenerate(`/api/projects/${projectId}/${stage}/generate?cloud=${cloudQS}`, {
+        await streamGenerate(`/api/engagements/${projectId}/${stage}/generate?cloud=${cloudQS}`, {
           onDelta: (d) => setRunText((t) => t + d),
-          onDone: () => { if (isLast) router.push(`/projects/${projectId}/${kind}`); },
+          onDone: () => { if (isLast) router.push(`/engagements/${projectId}/${kind}`); },
         });
       }
     } catch (e) {

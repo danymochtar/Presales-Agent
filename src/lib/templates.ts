@@ -11,9 +11,9 @@ export type TemplateMatch = {
   description: string | null;
   type: string;
   cloudProvider: string | null;
-  projectType: string | null;
+  engagementType: string | null;
   textContent: string;
-  specificity: number; // 0 = catch-all, +1 cloud-specific, +1 projectType-specific
+  specificity: number; // 0 = catch-all, +1 cloud-specific, +1 engagementType-specific
 };
 
 export async function findMatchingTemplates(args: {
@@ -21,8 +21,8 @@ export async function findMatchingTemplates(args: {
   // Template.type literal: bom | assessment | proposal | architecture |
   // tco | project_plan | sow | ms_offering | letterhead | other
   deliverableType: string;
-  cloud?: string | null;     // what's being generated: azure | aws | gcp | compare | multi | null
-  projectType?: string | null; // migration | greenfield | etc | null
+  cloud?: string | null;        // what's being generated: azure | aws | gcp | compare | multi | null
+  engagementType?: string | null; // migration | greenfield | etc | null
   maxCount?: number;
 }): Promise<TemplateMatch[]> {
   const all = await prisma.template.findMany({
@@ -35,25 +35,25 @@ export async function findMatchingTemplates(args: {
   });
 
   const cloud = args.cloud ?? null;
-  const ptype = args.projectType ?? null;
+  const ptype = args.engagementType ?? null;
 
   // Filter: a template matches when its cloudProvider is null (any-cloud) or
-  // matches the target cloud, AND its projectType is null or matches.
+  // matches the target cloud, AND its engagementType is null or matches.
   const scored = all
     .map((t): TemplateMatch | null => {
       const cloudOk = t.cloudProvider === null || t.cloudProvider === cloud;
-      const typeOk = t.projectType === null || t.projectType === ptype;
+      const typeOk = t.engagementType === null || t.engagementType === ptype;
       if (!cloudOk || !typeOk) return null;
       let specificity = 0;
       if (t.cloudProvider !== null) specificity++;
-      if (t.projectType !== null) specificity++;
+      if (t.engagementType !== null) specificity++;
       return {
         id: t.id,
         name: t.name,
         description: t.description,
         type: t.type,
         cloudProvider: t.cloudProvider,
-        projectType: t.projectType,
+        engagementType: t.engagementType,
         textContent: t.textContent ?? "",
         specificity,
       };
@@ -74,7 +74,7 @@ export function formatTemplatesAsPromptSection(
   const blocks = templates.map((t) => {
     const filters: string[] = [];
     if (t.cloudProvider) filters.push(`cloud=${t.cloudProvider}`);
-    if (t.projectType) filters.push(`project=${t.projectType}`);
+    if (t.engagementType) filters.push(`project=${t.engagementType}`);
     const filterTag = filters.length > 0 ? ` (${filters.join(", ")})` : "";
     const content =
       t.textContent.length > maxCharsPerTemplate

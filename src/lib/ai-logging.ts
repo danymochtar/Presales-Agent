@@ -7,7 +7,7 @@ import { prisma } from "./prisma";
 export type LogLlmCallArgs = {
   tenantId: string;
   userId?: string | null;
-  projectId?: string | null;
+  engagementId?: string | null;
   deliverableId?: string | null;
   purpose: string;
   model: string;
@@ -26,7 +26,7 @@ export async function logLlmCall(args: LogLlmCallArgs): Promise<void> {
       data: {
         tenantId: args.tenantId,
         userId: args.userId ?? null,
-        projectId: args.projectId ?? null,
+        engagementId: args.engagementId ?? null,
         deliverableId: args.deliverableId ?? null,
         purpose: args.purpose,
         model: args.model,

@@ -24,7 +24,7 @@ export type DeliverableKind =
   | "sow"
   | "ms-offering";
 
-export type ProjectType =
+export type EngagementType =
   | "migration"
   | "greenfield"
   | "modernization"
@@ -63,7 +63,7 @@ export const GROUP_LABELS: Record<Group, string> = {
   delivery: "Delivery",
 };
 
-const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {
+const ENGAGEMENT_TYPE_LABELS: Record<EngagementType, string> = {
   migration: "Migration",
   greenfield: "Greenfield (new build)",
   modernization: "Modernization",
@@ -73,9 +73,9 @@ const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {
   unknown: "Unclear (review needed)",
 };
 
-export function projectTypeLabel(t: string | null | undefined): string {
-  if (!t) return PROJECT_TYPE_LABELS.unknown;
-  return PROJECT_TYPE_LABELS[t as ProjectType] ?? t;
+export function engagementTypeLabel(t: string | null | undefined): string {
+  if (!t) return ENGAGEMENT_TYPE_LABELS.unknown;
+  return ENGAGEMENT_TYPE_LABELS[t as EngagementType] ?? t;
 }
 
 export const NEED_LABELS: Record<keyof Prereqs["needs"], string> = {

@@ -13,14 +13,14 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   const { id } = await ctx.params;
 
   const deliverable = await prisma.deliverable.findFirst({
-    where: { id, project: { tenant: { users: { some: { id: session.user.id } } } } },
-    include: { project: true },
+    where: { id, engagement: { tenant: { users: { some: { id: session.user.id } } } } },
+    include: { engagement: true },
   });
   if (!deliverable) return new Response("not found", { status: 404 });
 
-  const title = `${deliverable.project.name} — ${deliverable.type.toUpperCase()} v${deliverable.version}`;
+  const title = `${deliverable.engagement.name} — ${deliverable.type.toUpperCase()} v${deliverable.version}`;
   const buf = await markdownToDocxBuffer(deliverable.contentMd, title);
-  const filename = `${deliverable.project.customer.replace(/[^a-zA-Z0-9]+/g, "-")}-${deliverable.type}-v${deliverable.version}.docx`;
+  const filename = `${deliverable.engagement.customer.replace(/[^a-zA-Z0-9]+/g, "-")}-${deliverable.type}-v${deliverable.version}.docx`;
 
   return new Response(new Uint8Array(buf), {
     headers: {

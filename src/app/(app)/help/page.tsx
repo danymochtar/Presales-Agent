@@ -42,7 +42,7 @@ export default function HelpPage() {
               pipeline end-to-end.
             </p>
             <p className="text-xs"><strong>Use when:</strong> working a real deal from Discover through SOW.</p>
-            <Link href="/projects/new" className="inline-block text-xs underline">→ /projects/new</Link>
+            <Link href="/engagements/new" className="inline-block text-xs underline">→ /projects/new</Link>
           </div>
           <div className="rounded-md border p-3 space-y-2">
             <div className="font-medium">B. Quick generate</div>

@@ -15,8 +15,8 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   const { id } = await ctx.params;
 
   const deliverable = await prisma.deliverable.findFirst({
-    where: { id, project: { tenant: { users: { some: { id: session.user.id } } } } },
-    include: { project: { include: { tenant: { select: { fxMyrPerUsd: true } } } } },
+    where: { id, engagement: { tenant: { users: { some: { id: session.user.id } } } } },
+    include: { engagement: { include: { tenant: { select: { fxMyrPerUsd: true } } } } },
   });
   if (!deliverable) return new Response("not found", { status: 404 });
   if (deliverable.type !== "bom") {
@@ -45,20 +45,20 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   const cloud: CloudType = (deliverable.cloudProvider === "aws" ? "aws"
     : deliverable.cloudProvider === "gcp" ? "gcp"
     : "azure");
-  const cloudRegions = (deliverable.project.cloudRegions as Record<string, { primary: string; dr: string }> | null) ?? {};
+  const cloudRegions = (deliverable.engagement.cloudRegions as Record<string, { primary: string; dr: string }> | null) ?? {};
   const region = cloudRegions[cloud]?.primary ?? "";
-  const purchaseModel = (deliverable.project.purchaseModel ?? "consumption") as Term;
+  const purchaseModel = (deliverable.engagement.purchaseModel ?? "consumption") as Term;
 
   const buf = buildBomWorkbook(lineItems, {
     cloud,
-    projectName: deliverable.project.name,
-    customer: deliverable.project.customer,
+    projectName: deliverable.engagement.name,
+    customer: deliverable.engagement.customer,
     region,
     purchaseModelLabel: PURCHASE_MODEL_LABELS[purchaseModel],
-    fxMyrPerUsd: deliverable.project.tenant?.fxMyrPerUsd ?? null,
+    fxMyrPerUsd: deliverable.engagement.tenant?.fxMyrPerUsd ?? null,
   });
 
-  const filename = `${deliverable.project.customer.replace(/[^a-zA-Z0-9]+/g, "-")}-${cloud}-bom-v${deliverable.version}.xlsx`;
+  const filename = `${deliverable.engagement.customer.replace(/[^a-zA-Z0-9]+/g, "-")}-${cloud}-bom-v${deliverable.version}.xlsx`;
   return new Response(new Uint8Array(buf), {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

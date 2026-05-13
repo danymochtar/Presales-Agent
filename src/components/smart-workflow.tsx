@@ -4,17 +4,17 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   DELIVERABLE_PREREQS,
-  projectTypeLabel,
+  engagementTypeLabel,
   type DeliverableKind,
 } from "@/lib/deliverable-prereqs";
 import { streamGenerate } from "@/lib/sse-stream";
 
 type StageId = DeliverableKind;
 
-function stagePath(stage: StageId, projectId: string, cloud: string): string {
+function stagePath(stage: StageId, engagementId: string, cloud: string): string {
   // SOW falls back to azure in compare mode (legal scope is single-cloud).
-  if (stage === "sow" && cloud === "compare") return `/api/projects/${projectId}/sow/generate?cloud=azure`;
-  return `/api/projects/${projectId}/${stage}/generate?cloud=${cloud}`;
+  if (stage === "sow" && cloud === "compare") return `/api/engagements/${engagementId}/sow/generate?cloud=azure`;
+  return `/api/engagements/${engagementId}/${stage}/generate?cloud=${cloud}`;
 }
 
 const stageLabel = (s: StageId) => DELIVERABLE_PREREQS[s].label;
@@ -39,19 +39,19 @@ const CONFIDENCE_CHIP: Record<string, string> = {
 };
 
 export function SmartWorkflow({
-  projectId,
-  projectType,
-  projectTypeConfidence,
-  projectTypeRationale,
+  engagementId,
+  engagementType,
+  engagementTypeConfidence,
+  engagementTypeRationale,
   suggestedDeliverables,
   targetClouds,
   hasInventory,
   existingByStage,
 }: {
-  projectId: string;
-  projectType: string | null;
-  projectTypeConfidence: string | null;
-  projectTypeRationale: string | null;
+  engagementId: string;
+  engagementType: string | null;
+  engagementTypeConfidence: string | null;
+  engagementTypeRationale: string | null;
   suggestedDeliverables: string[];
   targetClouds: string[];
   hasInventory: boolean;
@@ -67,8 +67,8 @@ export function SmartWorkflow({
     if (suggestedDeliverables && suggestedDeliverables.length > 0) {
       return suggestedDeliverables.filter(valid);
     }
-    return DEFAULT_FLOWS[projectType ?? "unknown"] ?? DEFAULT_FLOWS.unknown;
-  }, [suggestedDeliverables, projectType]);
+    return DEFAULT_FLOWS[engagementType ?? "unknown"] ?? DEFAULT_FLOWS.unknown;
+  }, [suggestedDeliverables, engagementType]);
 
   const allStages = Object.keys(DELIVERABLE_PREREQS) as StageId[];
   const optionalStages = allStages.filter((s) => !flow.includes(s));
@@ -114,7 +114,7 @@ export function SmartWorkflow({
       setStepChars(0);
       try {
         let chars = 0;
-        await streamGenerate(stagePath(stage, projectId, cloud), {
+        await streamGenerate(stagePath(stage, engagementId, cloud), {
           onDelta: (d) => { chars += d.length; setStepChars(chars); },
         });
         setDoneStages((prev) => new Set(prev).add(stage));
@@ -137,19 +137,19 @@ export function SmartWorkflow({
 
   return (
     <div className="space-y-4">
-      {/* Project type panel */}
+      {/* Engagement type panel */}
       <div className="rounded-md border bg-primary/5 p-3 space-y-2">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs uppercase tracking-wider text-muted-foreground">Project type</span>
-          <span className="text-sm font-medium">{projectTypeLabel(projectType)}</span>
-          {projectTypeConfidence && (
-            <span className={`text-[10px] uppercase rounded px-1.5 py-0.5 ${CONFIDENCE_CHIP[projectTypeConfidence]}`}>
-              {projectTypeConfidence}
+          <span className="text-xs uppercase tracking-wider text-muted-foreground">Engagement type</span>
+          <span className="text-sm font-medium">{engagementTypeLabel(engagementType)}</span>
+          {engagementTypeConfidence && (
+            <span className={`text-[10px] uppercase rounded px-1.5 py-0.5 ${CONFIDENCE_CHIP[engagementTypeConfidence]}`}>
+              {engagementTypeConfidence}
             </span>
           )}
         </div>
-        {projectTypeRationale && (
-          <p className="text-xs text-muted-foreground italic">"{projectTypeRationale}"</p>
+        {engagementTypeRationale && (
+          <p className="text-xs text-muted-foreground italic">"{engagementTypeRationale}"</p>
         )}
         <p className="text-xs">
           <span className="text-muted-foreground">Suggested flow: </span>

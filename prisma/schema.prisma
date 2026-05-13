@@ -104,7 +104,7 @@ model Tenant {
   catalogItems   ServiceCatalogItem[]
   templates      Template[]
   knowledge      KnowledgeSample[]
-  projects       Project[]
+  engagements    Engagement[]
   patterns       LearnedPattern[]
   trackers       Tracker[]
 }
@@ -145,7 +145,7 @@ model Template {
   type          String
   // Optional filters — null means the template applies regardless.
   cloudProvider String?  // azure | aws | gcp | null
-  projectType   String?  // migration | greenfield | modernization | dr | poc | optimization | null
+  engagementType String? // migration | greenfield | modernization | dr | poc | optimization | null
   // Human-readable name + free description. Nullable so existing rows from
   // the pre-Phase-A schema migrate cleanly; UI falls back to originalName
   // when name is null.
@@ -183,8 +183,12 @@ model KnowledgeSample {
   @@index([tenantId, deliverableType])
 }
 
-// ---------- Projects ----------
-model Project {
+// ---------- Engagements ----------
+// A presales Engagement is the unit of work BEFORE a deal closes. Once
+// `stage` flips to `closed_won` the team will colloquially call it a
+// "Project" — but in this schema the entity stays Engagement throughout
+// its lifecycle so we don't fork the data model.
+model Engagement {
   id              String   @id @default(cuid())
   tenantId        String
   tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -192,7 +196,10 @@ model Project {
   customer        String
   industry        String?
   customerSegment String?  // BFSI | Gov | MNC | SMB — drives compliance posture
-  stage           String   @default("draft")    // draft | won | lost | pending | graduated
+  // Presales funnel — 7-stage:
+  // prospecting | qualifying | discovery | proposed | negotiating |
+  // closed_won | closed_lost
+  stage           String   @default("prospecting")
   mode            String   @default("production") // production | training
   scopeSummary    String?
   // Clouds to evaluate (e.g. ["azure"], ["azure", "aws"]).
@@ -211,31 +218,31 @@ model Project {
   // assessment or picks an override.
   solutionArea      String?
   // BNM RMiT applicability + critical-system answers + consultation status.
-  // Shape defined in src/lib/compliance/bnm-rmit.ts (ProjectComplianceJson).
+  // Shape defined in src/lib/compliance/bnm-rmit.ts (EngagementComplianceJson).
   compliance      Json?
   // MEDDPICC scoring rubric. Shape in src/lib/meddpicc.ts (Meddpicc).
   meddpicc        Json?
   // migration | greenfield | modernization | dr | poc | optimization | unknown
-  projectType            String?
-  projectTypeConfidence  String?  // high | medium | low
-  projectTypeRationale   String?  // 1-2 sentence why
+  engagementType         String?
+  engagementTypeConfidence String? // high | medium | low
+  engagementTypeRationale  String? // 1-2 sentence why
   // Ordered list of deliverable types AI recommends for this engagement
   suggestedDeliverables  String[] @default([])
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  inputs       ProjectInput[]
-  deliverables Deliverable[]
-  feedback     TrainingFeedback[]
+  inputs        EngagementInput[]
+  deliverables  Deliverable[]
+  feedback      TrainingFeedback[]
   opportunities Opportunity[]
 
   @@index([tenantId])
 }
 
-model ProjectInput {
+model EngagementInput {
   id              String   @id @default(cuid())
-  projectId       String
-  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  engagementId    String
+  engagement      Engagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
   kind            String   // rvtools | azure_migrate | generic_csv | rfp | meeting_notes | requirements | assessment_report | other
   blobUrl         String?
   filename        String?  // original uploaded filename (preserved for audit)
@@ -244,13 +251,13 @@ model ProjectInput {
   rawSummary      String?  // human-readable parse summary (e.g. "23 VMs, 144 vCPU, 384 GB RAM" or "PDF, 12 pages")
   createdAt       DateTime @default(now())
 
-  @@index([projectId])
+  @@index([engagementId])
 }
 
 model Deliverable {
   id            String   @id @default(cuid())
-  projectId     String
-  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  engagementId  String
+  engagement    Engagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
   type          String   // bom | proposal | architecture | assessment | project_plan
   cloudProvider String?  // azure | aws | gcp | compare | multi (null for cloud-agnostic deliverables)
   version       Int      @default(1)
@@ -260,38 +267,38 @@ model Deliverable {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  // MVP 2: per-cloud versions coexist via cloudProvider in the unique key.
+  // Per-cloud versions coexist via cloudProvider in the unique key.
   // Postgres treats multiple NULLs as distinct, so legacy rows with
   // cloudProvider=null don't conflict with new rows that set it explicitly.
-  @@unique([projectId, type, cloudProvider, version])
-  @@index([projectId, type])
+  @@unique([engagementId, type, cloudProvider, version])
+  @@index([engagementId, type])
 }
 
 model TrainingFeedback {
   id                String   @id @default(cuid())
-  projectId         String
-  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  engagementId      String
+  engagement        Engagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
   deliverableType   String
   feedback          String   @db.Text
   extractedPatterns Json?
   createdAt         DateTime @default(now())
 
-  @@index([projectId])
+  @@index([engagementId])
 }
 
 model LearnedPattern {
-  id              String   @id @default(cuid())
-  tenantId        String
-  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  deliverableType String
-  pattern         String   @db.Text
-  scope           String   @default("conditional") // universal | conditional
-  conditions      Json?
-  confidence      String   @default("medium")
-  rationale       String?  @db.Text
-  sourceProjectId String?
-  active          Boolean  @default(true)
-  createdAt       DateTime @default(now())
+  id                  String   @id @default(cuid())
+  tenantId            String
+  tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deliverableType     String
+  pattern             String   @db.Text
+  scope               String   @default("conditional") // universal | conditional
+  conditions          Json?
+  confidence          String   @default("medium")
+  rationale           String?  @db.Text
+  sourceEngagementId  String?
+  active              Boolean  @default(true)
+  createdAt           DateTime @default(now())
 
   @@index([tenantId, deliverableType])
 }
@@ -304,9 +311,9 @@ model LlmCall {
   id            String   @id @default(cuid())
   tenantId      String
   userId        String?
-  projectId     String?
+  engagementId  String?
   deliverableId String?
-  // What this call was for: extract-project | generate-bom | generate-architecture
+  // What this call was for: extract-engagement | generate-bom | generate-architecture
   // | generate-proposal | generate-assessment | generate-tco | generate-project-plan
   // | extract-workloads | extract-pattern | etc.
   purpose       String
@@ -370,8 +377,8 @@ model Opportunity {
   notes             String?   @db.Text
   lastTouchedAt     DateTime  @default(now())
   raw               Json
-  projectId         String?
-  project           Project?  @relation(fields: [projectId], references: [id])
+  engagementId      String?
+  engagement        Engagement? @relation(fields: [engagementId], references: [id])
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 

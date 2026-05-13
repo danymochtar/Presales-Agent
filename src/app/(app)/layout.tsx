@@ -13,9 +13,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const navItems: { href: string; label: string; badge?: string }[] = [
     { href: "/dashboard", label: "Dashboard" },
-    { href: "/projects", label: "Projects" },
+    { href: "/engagements", label: "Engagements" },
     { href: "/pipeline", label: "Pipeline" },
     { href: "/quick", label: "Quick" },
+    { href: "/library", label: "Reference library" },
     { href: "/services", label: "Services mapping" },
     { href: "/help", label: "Help" },
     { href: "/settings", label: "Settings" },

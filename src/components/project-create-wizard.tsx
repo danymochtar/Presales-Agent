@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { MARKET_DEFAULT_REGIONS, normalizeRegionLabel } from "@/lib/pricing/regions";
 import { PURCHASE_MODEL_LABELS, type Term, type CloudType } from "@/lib/pricing/types";
-import { projectTypeLabel, type ProjectType, type DeliverableKind, DELIVERABLE_PREREQS } from "@/lib/deliverable-prereqs";
+import { engagementTypeLabel, type EngagementType, type DeliverableKind, DELIVERABLE_PREREQS } from "@/lib/deliverable-prereqs";
 import { useFileParser } from "@/lib/use-file-parser";
 import { CloudTogglePicker, RegionPickerPerCloud, PurchaseModelPicker } from "@/components/cloud-region-pickers";
 import { SolutionAreaSuggester } from "@/components/solution-area-suggester";
@@ -26,8 +26,8 @@ type Extracted = {
   cloudRegions: Record<string, { primary: string; dr: string }>;
   keyRequirements: string[];
   constraints: string[];
-  projectType: ProjectType;
-  projectTypeRationale: string;
+  engagementType: EngagementType;
+  engagementTypeRationale: string;
   suggestedDeliverables: DeliverableKind[];
   confidence: {
     customer: Confidence;
@@ -36,7 +36,7 @@ type Extracted = {
     scopeSummary: Confidence;
     targetClouds: Confidence;
     cloudRegions: Confidence;
-    projectType: Confidence;
+    engagementType: Confidence;
   };
 };
 
@@ -82,7 +82,7 @@ export function ProjectCreateWizard() {
     setErr(null);
     setExtracting(true);
     try {
-      const res = await fetch("/api/projects/extract/synthesize", {
+      const res = await fetch("/api/engagements/extract/synthesize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -170,15 +170,15 @@ export function ProjectCreateWizard() {
           migrationStrategy,
           solutionArea: solutionArea ?? undefined,
           inputs,
-          projectType: extracted?.projectType,
-          projectTypeConfidence: extracted?.confidence?.projectType,
-          projectTypeRationale: extracted?.projectTypeRationale,
+          engagementType: extracted?.engagementType,
+          engagementTypeConfidence: extracted?.confidence?.engagementType,
+          engagementTypeRationale: extracted?.engagementTypeRationale,
           suggestedDeliverables: extracted?.suggestedDeliverables,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : "create failed");
-      router.push(`/projects/${data.project.id}`);
+      router.push(`/engagements/${data.engagement.id}`);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "create failed");
       setStep("review");
@@ -283,15 +283,15 @@ export function ProjectCreateWizard() {
               <div className="rounded-md border bg-primary/5 p-3 space-y-2">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs uppercase tracking-wider text-muted-foreground">Detected project type</span>
-                  <span className="text-sm font-medium">{projectTypeLabel(extracted.projectType)}</span>
-                  {extracted.confidence?.projectType && (
-                    <span className={`text-[10px] uppercase rounded px-1.5 py-0.5 ${CONFIDENCE_CHIP[extracted.confidence.projectType]}`}>
-                      {extracted.confidence.projectType}
+                  <span className="text-sm font-medium">{engagementTypeLabel(extracted.engagementType)}</span>
+                  {extracted.confidence?.engagementType && (
+                    <span className={`text-[10px] uppercase rounded px-1.5 py-0.5 ${CONFIDENCE_CHIP[extracted.confidence.engagementType]}`}>
+                      {extracted.confidence.engagementType}
                     </span>
                   )}
                 </div>
-                {extracted.projectTypeRationale && (
-                  <p className="text-xs text-muted-foreground italic">"{extracted.projectTypeRationale}"</p>
+                {extracted.engagementTypeRationale && (
+                  <p className="text-xs text-muted-foreground italic">"{extracted.engagementTypeRationale}"</p>
                 )}
                 {extracted.suggestedDeliverables.length > 0 && (
                   <div className="text-xs">

@@ -20,7 +20,7 @@ export function UploadInputForm({ projectId }: { projectId: string }) {
     const fd = new FormData();
     fd.append("file", file);
     try {
-      const res = await fetch(`/api/projects/${projectId}/inputs/parse`, { method: "POST", body: fd });
+      const res = await fetch(`/api/engagements/${projectId}/inputs/parse`, { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : "parse failed");
       setMsg(data.summary ?? "uploaded");
