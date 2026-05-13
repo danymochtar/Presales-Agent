@@ -33,6 +33,7 @@ export async function GET(_req: NextRequest) {
       name: o.name,
       status: o.status as PipelineStatus,
       rawStatus: o.rawStatus,
+      originKind: o.originKind,
       valueUsd: o.valueUsd ? Number(o.valueUsd) : null,
       valueMyr: o.valueMyr ? Number(o.valueMyr) : null,
       closeDate: o.closeDate,

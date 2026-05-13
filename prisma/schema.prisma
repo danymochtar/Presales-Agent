@@ -353,6 +353,11 @@ model Tracker {
   source        String
   fieldMapping  Json
   statusMapping Json?
+  // Applied to every opportunity imported from this tracker when the source
+  // row doesn't have its own origin column. Lets the user say "this tracker
+  // is all FY26 carry-over" once instead of tagging every row.
+  // carry_over | new_target | existing_customer | net_new | unknown
+  defaultOriginKind String? @default("unknown")
   lastSyncAt    DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -374,6 +379,9 @@ model Opportunity {
   // needs_follow_up | unknown
   status            String    @default("unknown")
   rawStatus         String?
+  // Planning axis. carry_over | new_target | existing_customer | net_new | unknown.
+  // Inherits the tracker's defaultOriginKind on import; users override per row.
+  originKind        String    @default("unknown")
   valueUsd          Decimal?  @db.Decimal(14, 2)
   valueMyr          Decimal?  @db.Decimal(14, 2)
   closeDate         DateTime?
@@ -391,5 +399,6 @@ model Opportunity {
 
   @@index([trackerId])
   @@index([status])
+  @@index([originKind])
   @@index([closeDate])
 }

@@ -9,6 +9,7 @@ function row(over: Partial<PipelineOpportunityRow> = {}): PipelineOpportunityRow
     id: "x", trackerName: "Microsoft biweekly", trackerSource: "microsoft",
     externalId: null, customer: "Acme", name: "Acme Cloud",
     status: "committed", rawStatus: "Commit",
+    originKind: "unknown",
     valueUsd: 100000, valueMyr: 470000, closeDate: new Date("2026-05-20"),
     ownerName: "Alice", vendor: "Microsoft",
     fundingProgram: null, fundingExpiresAt: null,

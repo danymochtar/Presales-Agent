@@ -6,11 +6,13 @@ import { prisma } from "@/lib/prisma";
 import { requireSessionAndTenant } from "@/lib/tenant";
 import { readWorkbookPreview, readWorkbookRows, suggestMapping, applyMapping, type FieldMapping, CANONICAL_FIELDS } from "@/lib/pipeline/field-mapping";
 import type { PipelineStatus } from "@/lib/pipeline/status";
+import { OPPORTUNITY_ORIGINS, detectOrigin, type OpportunityOrigin } from "@/lib/pipeline/origin";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const SourceEnum = z.enum(["microsoft", "smb", "smc", "ent_ps", "sales_rep", "funding", "other"]);
+const OriginEnum = z.enum(OPPORTUNITY_ORIGINS as [OpportunityOrigin, ...OpportunityOrigin[]]);
 
 const FieldMappingSchema = z.record(z.enum(CANONICAL_FIELDS as [string, ...string[]]), z.string().nullable());
 const StatusMappingSchema = z.record(z.string(), z.string());
@@ -38,6 +40,7 @@ export async function POST(req: NextRequest) {
   const file = form.get("file");
   const name = String(form.get("name") ?? "").trim();
   const source = String(form.get("source") ?? "other");
+  const defaultOriginRaw = String(form.get("defaultOriginKind") ?? "unknown");
   const mappingRaw = form.get("mapping");
   const statusMappingRaw = form.get("statusMapping");
 
@@ -45,6 +48,11 @@ export async function POST(req: NextRequest) {
   if (!SourceEnum.safeParse(source).success) {
     return NextResponse.json({ error: "invalid source" }, { status: 400 });
   }
+  // Origin: explicit form value wins; otherwise infer from the tracker name
+  // (e.g. "FY26 carry-over", "FY27 target list"); default unknown.
+  const explicitOrigin = OriginEnum.safeParse(defaultOriginRaw);
+  const defaultOriginKind: OpportunityOrigin =
+    explicitOrigin.success ? explicitOrigin.data : (detectOrigin(name) ?? "unknown");
   if (!file || typeof file === "string") {
     return NextResponse.json({ error: "file required" }, { status: 400 });
   }
@@ -82,6 +90,7 @@ export async function POST(req: NextRequest) {
         source,
         fieldMapping: mapping as object,
         statusMapping: (statusMapping as object | null) ?? undefined,
+        defaultOriginKind,
         lastSyncAt: new Date(),
       },
     });
@@ -94,6 +103,7 @@ export async function POST(req: NextRequest) {
           name: o.name,
           status: o.status,
           rawStatus: o.rawStatus,
+          originKind: defaultOriginKind,
           valueUsd: o.valueUsd ?? null,
           valueMyr: o.valueMyr ?? null,
           closeDate: o.closeDate,

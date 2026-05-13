@@ -8,9 +8,16 @@ import { Button } from "@/components/ui/button";
 import { KpiStrip } from "@/components/pipeline/kpi-strip";
 import { TrackerCard } from "@/components/pipeline/tracker-card";
 import { StatusPill } from "@/components/pipeline/status-pill";
+import { OriginPill } from "@/components/pipeline/origin-pill";
 import { QuickNoteCell } from "@/components/pipeline/quick-note-cell";
 import { summarize, type PipelineOpportunityRow } from "@/lib/exporters/pipeline-xlsx";
 import type { PipelineStatus } from "@/lib/pipeline/status";
+import {
+  OPPORTUNITY_ORIGINS,
+  ORIGIN_LABELS,
+  ORIGIN_COLORS,
+  type OpportunityOrigin,
+} from "@/lib/pipeline/origin";
 
 function fmtDate(d: Date | null): string {
   return d ? d.toISOString().slice(0, 10) : "—";
@@ -40,6 +47,7 @@ export default async function PipelinePage() {
       name: o.name,
       status: o.status as PipelineStatus,
       rawStatus: o.rawStatus,
+      originKind: o.originKind,
       valueUsd: o.valueUsd ? Number(o.valueUsd) : null,
       valueMyr: o.valueMyr ? Number(o.valueMyr) : null,
       closeDate: o.closeDate,
@@ -117,6 +125,34 @@ export default async function PipelinePage() {
       </section>
 
       <section className="space-y-2">
+        <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">By origin — plan view</h2>
+        <Card>
+          <CardContent className="p-3">
+            {allRows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Upload a tracker to see opportunities split by origin (carry-over / FY target / existing customer / net-new).
+                Each row can be re-tagged from the Origin column below.
+              </p>
+            ) : (
+              <ul className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+                {OPPORTUNITY_ORIGINS.map((origin) => {
+                  const v = s.byOrigin[origin];
+                  if (v.count === 0) return null;
+                  return (
+                    <li key={origin} className={`rounded-md border p-2.5 ${ORIGIN_COLORS[origin]}`}>
+                      <div className="font-medium">{ORIGIN_LABELS[origin]}</div>
+                      <div className="text-base font-semibold tabular-nums mt-0.5">${Math.round(v.usd).toLocaleString()}</div>
+                      <div className="opacity-70">{v.count} deal{v.count === 1 ? "" : "s"}</div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="space-y-2">
         <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">All opportunities</h2>
         <Card>
           <CardHeader className="pb-2">
@@ -129,6 +165,7 @@ export default async function PipelinePage() {
                   <tr>
                     <th className="px-3 py-2 font-medium">Customer / Opp</th>
                     <th className="px-3 py-2 font-medium">Tracker</th>
+                    <th className="px-3 py-2 font-medium">Origin</th>
                     <th className="px-3 py-2 font-medium">Status</th>
                     <th className="px-3 py-2 font-medium text-right">USD</th>
                     <th className="px-3 py-2 font-medium text-right">MYR</th>
@@ -145,6 +182,7 @@ export default async function PipelinePage() {
                         <div className="text-muted-foreground">{r.name}</div>
                       </td>
                       <td className="px-3 py-2 text-muted-foreground">{r.trackerName}</td>
+                      <td className="px-3 py-2"><OriginPill opportunityId={r.id} origin={r.originKind as OpportunityOrigin} /></td>
                       <td className="px-3 py-2"><StatusPill status={r.status} /></td>
                       <td className="px-3 py-2 text-right tabular-nums">{fmtNum(r.valueUsd)}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{fmtNum(r.valueMyr)}</td>

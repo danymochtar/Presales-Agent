@@ -5,12 +5,14 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { requireSessionAndTenant } from "@/lib/tenant";
 import { PIPELINE_STATUSES, statusFromNote } from "@/lib/pipeline/status";
+import { OPPORTUNITY_ORIGINS } from "@/lib/pipeline/origin";
 
 export const runtime = "nodejs";
 
 const PatchSchema = z.object({
   notes: z.string().nullable().optional(),
   status: z.enum(PIPELINE_STATUSES as [string, ...string[]]).optional(),
+  originKind: z.enum(OPPORTUNITY_ORIGINS as [string, ...string[]]).optional(),
   closeDate: z.string().nullable().optional(),
   valueUsd: z.number().nullable().optional(),
   valueMyr: z.number().nullable().optional(),
@@ -46,6 +48,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     data: {
       notes: data.notes === undefined ? undefined : data.notes,
       status: inferredStatus,
+      originKind: data.originKind === undefined ? undefined : data.originKind,
       closeDate: data.closeDate === undefined ? undefined : data.closeDate === null ? null : new Date(data.closeDate),
       valueUsd: data.valueUsd === undefined ? undefined : data.valueUsd,
       valueMyr: data.valueMyr === undefined ? undefined : data.valueMyr,

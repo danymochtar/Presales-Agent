@@ -7,6 +7,7 @@
 import * as XLSX from "xlsx";
 import type { PipelineStatus } from "@/lib/pipeline/status";
 import { STATUS_LABELS, PIPELINE_STATUSES } from "@/lib/pipeline/status";
+import { OPPORTUNITY_ORIGINS, ORIGIN_LABELS, type OpportunityOrigin } from "@/lib/pipeline/origin";
 
 export type PipelineOpportunityRow = {
   id: string;
@@ -17,6 +18,7 @@ export type PipelineOpportunityRow = {
   name: string;
   status: PipelineStatus;
   rawStatus: string | null;
+  originKind: string;
   valueUsd: number | null;
   valueMyr: number | null;
   closeDate: Date | null;
@@ -64,6 +66,8 @@ function endOfQuarter(d: Date): Date {
 export function summarize(rows: PipelineOpportunityRow[], asOf: Date) {
   const byStatus: Record<PipelineStatus, { count: number; usd: number; myr: number }> = {} as never;
   for (const s of PIPELINE_STATUSES) byStatus[s] = { count: 0, usd: 0, myr: 0 };
+  const byOrigin: Record<OpportunityOrigin, { count: number; usd: number; myr: number }> = {} as never;
+  for (const o of OPPORTUNITY_ORIGINS) byOrigin[o] = { count: 0, usd: 0, myr: 0 };
   let totalCount = 0;
   let totalUsd = 0;
   let totalMyr = 0;
@@ -77,6 +81,12 @@ export function summarize(rows: PipelineOpportunityRow[], asOf: Date) {
     byStatus[r.status].count += 1;
     byStatus[r.status].usd += r.valueUsd ?? 0;
     byStatus[r.status].myr += r.valueMyr ?? 0;
+    const o = (OPPORTUNITY_ORIGINS as readonly string[]).includes(r.originKind)
+      ? (r.originKind as OpportunityOrigin)
+      : "unknown";
+    byOrigin[o].count += 1;
+    byOrigin[o].usd += r.valueUsd ?? 0;
+    byOrigin[o].myr += r.valueMyr ?? 0;
     totalCount += 1;
     totalUsd += r.valueUsd ?? 0;
     totalMyr += r.valueMyr ?? 0;
@@ -90,7 +100,7 @@ export function summarize(rows: PipelineOpportunityRow[], asOf: Date) {
     }
   }
   return {
-    byStatus, totalCount, totalUsd, totalMyr,
+    byStatus, byOrigin, totalCount, totalUsd, totalMyr,
     closingMonthCount, closingMonthUsd,
     closingQuarterCount, closingQuarterUsd,
   };
@@ -118,6 +128,13 @@ function buildSummarySheet(
     data.push([STATUS_LABELS[status], v.count, +v.usd.toFixed(2), +v.myr.toFixed(2)]);
   }
   data.push([]);
+  data.push(["By origin", "Count", "Value (USD)", "Value (MYR)"]);
+  for (const origin of OPPORTUNITY_ORIGINS) {
+    const v = s.byOrigin[origin];
+    if (v.count === 0) continue;
+    data.push([ORIGIN_LABELS[origin], v.count, +v.usd.toFixed(2), +v.myr.toFixed(2)]);
+  }
+  data.push([]);
   data.push(["Closing this month", s.closingMonthCount, +s.closingMonthUsd.toFixed(2)]);
   data.push(["Closing this quarter", s.closingQuarterCount, +s.closingQuarterUsd.toFixed(2)]);
   data.push([]);
@@ -129,15 +146,16 @@ function buildSummarySheet(
 function buildAllSheet(rows: PipelineOpportunityRow[]): XLSX.WorkSheet {
   const header = [
     "Tracker", "Source", "External ID", "Customer", "Opportunity",
-    "Status", "Raw status", "Value (USD)", "Value (MYR)",
+    "Origin", "Status", "Raw status", "Value (USD)", "Value (MYR)",
     "Close date", "Owner", "Vendor", "Funding program",
     "Funding expires", "Notes",
   ];
   const data: (string | number | null)[][] = [header];
   for (const r of rows) {
+    const originLabel = ORIGIN_LABELS[r.originKind as OpportunityOrigin] ?? r.originKind;
     data.push([
       r.trackerName, r.trackerSource, r.externalId, r.customer, r.name,
-      STATUS_LABELS[r.status], r.rawStatus, r.valueUsd, r.valueMyr,
+      originLabel, STATUS_LABELS[r.status], r.rawStatus, r.valueUsd, r.valueMyr,
       formatDate(r.closeDate), r.ownerName, r.vendor, r.fundingProgram,
       formatDate(r.fundingExpiresAt), r.notes,
     ]);
