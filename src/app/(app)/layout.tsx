@@ -5,11 +5,18 @@ import { auth } from "@/lib/auth";
 import { requireSessionAndTenant } from "@/lib/tenant";
 import { SignOutButton } from "@/components/sign-out-button";
 import { MobileNav } from "@/components/mobile-nav";
+import { tenantBranding } from "@/lib/tenant-settings";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) redirect("/sign-in");
   const { user, tenant } = await requireSessionAndTenant(session.user.id);
+  const branding = tenantBranding(tenant);
+  // Split "Noventiq Multicloud Agent" -> ["Noventiq", "Multicloud Agent"] for
+  // the two-tier header treatment; users that pick a single-word name see
+  // just the word.
+  const [brandWord, ...brandRest] = branding.displayName.split(/\s+/);
+  const brandTail = brandRest.join(" ");
 
   const navItems: { href: string; label: string; badge?: string }[] = [
     { href: "/dashboard", label: "Dashboard" },
@@ -31,9 +38,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <div className="flex items-center gap-2 md:gap-6 min-w-0 flex-1">
             <MobileNav items={navItems} currentEmail={user.email} currentTenant={tenant.name} />
             <Link href="/dashboard" className="font-semibold flex items-center gap-1.5 truncate">
-              <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-primary text-primary-foreground text-[10px] font-bold tracking-tighter shrink-0">N</span>
-              <span className="hidden sm:inline">Noventiq</span>
-              <span className="text-muted-foreground font-normal hidden md:inline">Multicloud Agent</span>
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-primary text-primary-foreground text-[10px] font-bold tracking-tighter shrink-0">{branding.logoLetter}</span>
+              <span className="hidden sm:inline">{brandWord}</span>
+              {brandTail && <span className="text-muted-foreground font-normal hidden md:inline">{brandTail}</span>}
             </Link>
             <nav className="hidden md:flex items-center gap-4 text-sm text-muted-foreground">
               {navItems.map((item) => (

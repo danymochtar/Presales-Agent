@@ -14,7 +14,8 @@ import { relTime } from "@/lib/format-time";
 import { eligiblePrograms, topMatchSummary } from "@/lib/funding/eligibility";
 import type { CloudType } from "@/lib/pricing/types";
 import { isApplicable as rmitApplicable, isAcknowledged as rmitAcknowledged } from "@/lib/compliance/bnm-rmit";
-import { score as mcemScore, healthBand, type Mcem, stageLabel } from "@/lib/mcem";
+import { score as mcemScore, type Mcem, stageLabel } from "@/lib/mcem";
+import { tenantMcemBand } from "@/lib/tenant-settings";
 import { customerNamesMatch } from "@/lib/pipeline/customer-match";
 
 type Deliverable = {
@@ -53,6 +54,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   const project = await prisma.engagement.findFirst({
     where: { id, tenant: { users: { some: { id: session!.user.id } } } },
     include: {
+      tenant: { select: { thresholds: true, country: true } },
       inputs: { orderBy: { createdAt: "desc" } },
       deliverables: { orderBy: [{ type: "asc" }, { version: "desc" }] },
       feedback: { orderBy: { createdAt: "desc" }, take: 5 },
@@ -89,7 +91,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     ? topMatchSummary(eligiblePrograms({ acrByCloud, market: "B" }))
     : null;
   const dealHealth = mcemScore(project.mcem as Mcem | null, project.stage);
-  const dealHealthBand = healthBand(dealHealth.totalPct);
+  const dealHealthBand = tenantMcemBand(project.tenant ?? null, dealHealth.totalPct);
 
   const byType = (t: string) => project.deliverables.filter((d) => d.type === t) as Deliverable[];
   const groupedDeliverables = DELIVERABLE_DEFS.map((def) => ({ def, items: byType(def.type) }));

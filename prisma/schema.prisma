@@ -108,6 +108,17 @@ model Tenant {
   // wrap with a KMS-backed envelope before going wide. Schema documented in
   // src/lib/integrations/creatio.ts (CreatioCredentials).
   integrations Json?
+  // Display + brand overrides. Shape (src/lib/tenant-settings.ts):
+  //   { displayName, logoLetter, accentHue, perCloudHue: { azure, aws, gcp, services } }
+  branding     Json?
+  // Per-key label overrides. Flat namespace keyed by e.g.
+  //   "status.committed", "origin.new_target", "phase.listen", "role.solution_architect"
+  // Empty / missing key = fall back to the lib default.
+  vocabulary   Json?
+  // Operational threshold overrides. Shape (src/lib/tenant-settings.ts):
+  //   { mcemGreenPct, mcemAmberPct, fileSizeMb, dashboardLookbackDays,
+  //     dashboardActiveMax, dashboardNextActionsMax }
+  thresholds   Json?
 
   users          User[]
   rateCardItems  RateCardItem[]

@@ -19,8 +19,14 @@ export default async function ProjectsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h1 className="text-xl md:text-2xl font-semibold">Engagements</h1>
+      <div className="flex items-end justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-xl md:text-2xl font-semibold">Engagements</h1>
+          <p className="text-sm text-muted-foreground max-w-2xl">
+            Every presales engagement you&apos;ve created — open + closed-won + closed-lost. Click a row to drill into
+            the engagement detail page (MCEM checks, deliverables, linked pipeline opportunities).
+          </p>
+        </div>
         <Button asChild size="sm"><Link href="/engagements/new">+ New engagement</Link></Button>
       </div>
       <Card>

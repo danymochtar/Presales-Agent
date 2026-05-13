@@ -18,15 +18,22 @@ import {
   type TargetMetric,
 } from "@/lib/business/targets";
 import { cloudOfVendor, CLOUD_LABELS, CLOUD_COLORS, type TargetCloud } from "@/lib/business/cloud-of-vendor";
+import { tenantThresholds } from "@/lib/tenant-settings";
+import { HelpTooltip } from "@/components/ui/help-tooltip";
 
 function fmtMoney(n: number): string {
   return `$${Math.round(n).toLocaleString()}`;
 }
 
-function bandClass(pct: number | null): string {
+// Attainment bands are anchored on 100 = on-target. The green/amber/red
+// cutoffs for partial attainment use the tenant's configured MCEM bands
+// (Settings → Thresholds) so a team that sets the green cutoff to 80
+// gets a different colour at 75% attainment than the default.
+function bandClass(pct: number | null, greenPct: number, amberPct: number): string {
   if (pct === null) return "text-muted-foreground";
-  if (pct >= 100) return "text-emerald-700 dark:text-emerald-300";
-  if (pct >= 70)  return "text-amber-700 dark:text-amber-300";
+  if (pct >= 100)       return "text-emerald-700 dark:text-emerald-300";
+  if (pct >= greenPct)  return "text-emerald-700 dark:text-emerald-300";
+  if (pct >= amberPct)  return "text-amber-700 dark:text-amber-300";
   return "text-rose-700 dark:text-rose-300";
 }
 
@@ -36,6 +43,7 @@ export default async function BusinessDashboardPage() {
   const fy: FiscalYearConfig | null = isFiscalYearConfig(tenant.fiscalYear) ? tenant.fiscalYear : null;
   if (!fy) redirect("/setup");
   const today = new Date();
+  const { mcemGreenPct, mcemAmberPct } = tenantThresholds(tenant);
 
   const [targets, opportunities] = await Promise.all([
     prisma.businessTarget.findMany({
@@ -152,7 +160,10 @@ export default async function BusinessDashboardPage() {
       {/* Headline: full-year revenue per cloud */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Full-year revenue · per cloud</CardTitle>
+          <CardTitle className="text-base flex items-center gap-1.5">
+            Full-year revenue · per cloud
+            <HelpTooltip text="Actual = sum of opportunities with status committed/won and closeDate inside the current fiscal year, filtered by cloud (via vendor name). Attainment % = actual ÷ target × 100. Bands green/amber/red use your Settings → Thresholds cutoffs." />
+          </CardTitle>
           <CardDescription>
             Each tile shows {fy.currentLabel} target, actual booked (committed + won), and % attainment. Add a per-cloud
             target on the <Link href="/business/targets" className="underline">Targets</Link> page if a tile is empty.
@@ -185,7 +196,7 @@ export default async function BusinessDashboardPage() {
                     <CardContent className="p-3 space-y-1">
                       <div className="flex items-center justify-between">
                         <span className={`text-[10px] uppercase rounded border px-1.5 py-0.5 ${CLOUD_COLORS[c]}`}>{CLOUD_LABELS[c]}</span>
-                        <span className={`text-xs font-medium ${bandClass(t.pct)}`}>
+                        <span className={`text-xs font-medium ${bandClass(t.pct, mcemGreenPct, mcemAmberPct)}`}>
                           {t.pct === null ? "—" : `${t.pct}%`}
                         </span>
                       </div>
@@ -205,7 +216,10 @@ export default async function BusinessDashboardPage() {
       {otherTargets.length > 0 && (
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">All targets ({resolved.length})</CardTitle>
+            <CardTitle className="text-base flex items-center gap-1.5">
+              All targets ({resolved.length})
+              <HelpTooltip text="Every target row you've defined. Cost / margin / CSAT metrics show target only — actuals require a manual cost-import path (planned). Revenue / ACR / deal-count / win-rate are auto from pipeline." />
+            </CardTitle>
             <CardDescription>
               Every slice — Y / Q / M, cloud, product, segment, owner. Cost / margin / CSAT metrics show target only
               (actuals require manual entry until a cost-import path is added).
@@ -247,7 +261,7 @@ export default async function BusinessDashboardPage() {
                         <td className="px-3 py-2 text-right tabular-nums">
                           {showActuals ? (metricIsCurrency(t.metric) ? fmtMoney(t.actual) : t.actual.toLocaleString()) : "—"}
                         </td>
-                        <td className={`px-3 py-2 text-right font-medium tabular-nums ${bandClass(t.pct)}`}>
+                        <td className={`px-3 py-2 text-right font-medium tabular-nums ${bandClass(t.pct, mcemGreenPct, mcemAmberPct)}`}>
                           {t.pct === null ? "—" : `${t.pct}%`}
                         </td>
                       </tr>
@@ -263,7 +277,10 @@ export default async function BusinessDashboardPage() {
       {/* Owner roll-up */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Per-owner — committed + won {fy.currentLabel}</CardTitle>
+          <CardTitle className="text-base flex items-center gap-1.5">
+            Per-owner — committed + won {fy.currentLabel}
+            <HelpTooltip text="Sum of opportunity USD where the person is assigned in any role (SA / Sales / AM / Partner / CSM) and the opportunity is committed or won this FY. Add team members on /team and assign them via the pipeline page." />
+          </CardTitle>
           <CardDescription>
             Total USD on opportunities each team member is assigned to, summed across all roles (SA / Sales / AM /
             Partner / CSM). Sourced live from the pipeline tracker.

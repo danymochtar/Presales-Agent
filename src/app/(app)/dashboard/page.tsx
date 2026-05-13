@@ -17,7 +17,6 @@ import {
   phaseForStage,
   nextAction,
   score as mcemScore,
-  healthBand,
   stageLabel,
   isOpenStage,
   type Mcem,
@@ -25,6 +24,8 @@ import {
 } from "@/lib/mcem";
 import { customerNamesMatch } from "@/lib/pipeline/customer-match";
 import { isFiscalYearConfig, fyQuarterLabel, type FiscalYearConfig } from "@/lib/fiscal-year";
+import { tenantBranding, tenantThresholds, tenantMcemBand } from "@/lib/tenant-settings";
+import { HelpTooltip } from "@/components/ui/help-tooltip";
 
 const deliverableLabel = (dbType: string): string => {
   const k = kindOfDbType(dbType);
@@ -49,7 +50,8 @@ export default async function DashboardPage() {
   const trackerCount = await prisma.tracker.count({ where: { tenantId: tenant.id } });
   if (!fy || trackerCount === 0) redirect("/setup");
 
-  const SEVEN_DAYS_AGO = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const thresholds = tenantThresholds(tenant);
+  const SEVEN_DAYS_AGO = new Date(Date.now() - thresholds.dashboardLookbackDays * 24 * 60 * 60 * 1000);
 
   const [engagements, recentDeliverables, opportunities, rateCount, catalogCount, patternCount, templateCount] = await Promise.all([
     prisma.engagement.findMany({
@@ -119,7 +121,7 @@ export default async function DashboardPage() {
       actionPath: path,
     });
   }
-  nextActions.splice(6); // cap
+  nextActions.splice(thresholds.dashboardNextActionsMax); // cap
 
   const firstName = user.name ? user.name.split(" ")[0] : null;
   const hasEngagements = engagements.length > 0;
@@ -231,7 +233,7 @@ export default async function DashboardPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center justify-between gap-2">
-              <span>MCEM pipeline</span>
+              <span className="flex items-center gap-1.5">MCEM pipeline <HelpTooltip text="Open engagements grouped by their current MCEM phase (Listen / Design / Empower / Realize / Manage). USD totals come from matched pipeline opportunities (committed + won) for each phase." /></span>
               <span className="text-xs text-muted-foreground font-normal">
                 {activeEngagements.length} open · ${Math.round(totalActiveUsd).toLocaleString()}
               </span>
@@ -267,7 +269,10 @@ export default async function DashboardPage() {
         {/* Next actions */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Next actions</CardTitle>
+            <CardTitle className="text-base flex items-center gap-1.5">
+              Next actions
+              <HelpTooltip text="The first unchecked MCEM exit-criterion for every open engagement. Each row deep-links to the right deliverable page (Assessment / Architecture / BOM / Proposal …)." />
+            </CardTitle>
             <p className="text-xs text-muted-foreground">First open MCEM exit-criterion per engagement. Click to jump to the right page.</p>
           </CardHeader>
           <CardContent>
@@ -298,7 +303,10 @@ export default async function DashboardPage() {
         {/* This week */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">This week</CardTitle>
+            <CardTitle className="text-base flex items-center gap-1.5">
+              This week
+              <HelpTooltip text={`Deliverables generated in the last ${thresholds.dashboardLookbackDays} days. Adjust the window on /settings → Thresholds.`} />
+            </CardTitle>
             <p className="text-xs text-muted-foreground">Deliverables generated in the last 7 days.</p>
           </CardHeader>
           <CardContent>
@@ -347,10 +355,10 @@ export default async function DashboardPage() {
               </p>
             ) : (
               <ul className="divide-y">
-                {activeEngagements.slice(0, 5).map((project) => {
+                {activeEngagements.slice(0, thresholds.dashboardActiveMax).map((project) => {
                   const targetClouds = ((project.targetClouds as string[] | null) ?? ["azure"]).filter((c) => c !== "gcp");
                   const h = mcemScore(project.mcem as Mcem | null, project.stage);
-                  const band = healthBand(h.totalPct);
+                  const band = tenantMcemBand(tenant, h.totalPct);
                   const cls = band === "green"
                     ? "text-emerald-700 dark:text-emerald-300"
                     : band === "amber" ? "text-amber-700 dark:text-amber-300"

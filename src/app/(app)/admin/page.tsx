@@ -33,6 +33,14 @@ export default async function AdminOverviewPage() {
 
   return (
     <div className="space-y-4">
+      <div>
+        <h1 className="text-xl md:text-2xl font-semibold">Admin</h1>
+        <p className="text-sm text-muted-foreground max-w-3xl">
+          Superadmin tools — Reference library templates, LLM usage + cost, users, the Creatio CRM connector, and a
+          Danger-zone reset for wiping pilot data. Most day-to-day configuration (branding, vocabulary, thresholds,
+          rate card, service catalog) lives on <code>/settings</code> for any tenant user.
+        </p>
+      </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card>
           <CardHeader><CardTitle className="text-sm font-medium">Templates</CardTitle></CardHeader>
