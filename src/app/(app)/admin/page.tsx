@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getSuperadminContextForPage } from "@/lib/admin";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ResetWorkspaceButton } from "@/components/reset-workspace-button";
 
 export default async function AdminOverviewPage() {
   const ctx = (await getSuperadminContextForPage())!;
@@ -65,6 +66,21 @@ export default async function AdminOverviewPage() {
             <li><strong>Usage</strong> — every LLM call (extraction, generation, training feedback) is logged with input + output tokens, model, duration, and outcome. Use this to track AI spend, spot stuck flows, and benchmark per-deliverable cost.</li>
             <li><strong>Users</strong> — multi-user pilot in a future phase. For now, the first user to sign up auto-becomes superadmin.</li>
           </ul>
+        </CardContent>
+      </Card>
+
+      <Card className="border-rose-300/60 dark:border-rose-900/40">
+        <CardHeader>
+          <CardTitle className="text-rose-900 dark:text-rose-200">Danger zone</CardTitle>
+          <CardDescription>
+            One-click full reset of this tenant&apos;s workspace data. Use when you want to wipe a pilot or
+            demo and start fresh — engagements, deliverables, pipeline opportunities, trackers, templates,
+            custom rules, LLM call logs, rate-card and service-catalog rows all go. Tenant config, your
+            user, and sign-in sessions stay intact.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ResetWorkspaceButton />
         </CardContent>
       </Card>
     </div>
