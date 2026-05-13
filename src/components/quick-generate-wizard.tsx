@@ -183,7 +183,7 @@ export function QuickGenerateWizard() {
 
       const customerForApi = customer.trim() || "(quick)";
 
-      const createRes = await fetch("/api/projects", {
+      const createRes = await fetch("/api/engagements", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

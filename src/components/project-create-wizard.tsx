@@ -156,7 +156,7 @@ export function ProjectCreateWizard() {
         textContent: f.textContent,
         workloadsJson: f.workloads,
       }));
-      const res = await fetch("/api/projects", {
+      const res = await fetch("/api/engagements", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
