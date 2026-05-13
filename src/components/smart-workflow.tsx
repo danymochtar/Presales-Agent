@@ -12,26 +12,24 @@ import { streamGenerate } from "@/lib/sse-stream";
 type StageId = DeliverableKind;
 
 function stagePath(stage: StageId, projectId: string, cloud: string): string {
-  // Customer study is cloud-agnostic; SOW falls back to azure in compare mode.
-  if (stage === "customer-study") return `/api/projects/${projectId}/customer-study/generate`;
+  // SOW falls back to azure in compare mode (legal scope is single-cloud).
   if (stage === "sow" && cloud === "compare") return `/api/projects/${projectId}/sow/generate?cloud=azure`;
   return `/api/projects/${projectId}/${stage}/generate?cloud=${cloud}`;
 }
 
 const stageLabel = (s: StageId) => DELIVERABLE_PREREQS[s].label;
 
-// Fallback flow when AI didn't suggest one (e.g. legacy projects).
-// Customer Study comes FIRST in every flow — it primes everything downstream
-// with customer profile + current IT landscape (system types, applications,
-// databases, identity, network, ops, security).
+// Fallback flow when AI didn't suggest one. Assessment leads — its executive
+// summary now does the customer-background research that the old Customer
+// Study deliverable used to produce as a separate artifact.
 const DEFAULT_FLOWS: Record<string, StageId[]> = {
-  migration:     ["customer-study", "assessment", "architecture", "bom", "professional-services", "tco", "project-plan", "proposal"],
-  greenfield:    ["customer-study", "architecture", "bom", "professional-services", "tco", "project-plan", "proposal"],
-  modernization: ["customer-study", "assessment", "architecture", "bom", "professional-services", "project-plan", "proposal"],
-  dr:            ["customer-study", "architecture", "bom", "professional-services", "project-plan", "proposal"],
-  poc:           ["customer-study", "architecture", "bom", "professional-services", "proposal"],
-  optimization:  ["customer-study", "assessment", "bom", "professional-services", "proposal"],
-  unknown:       ["customer-study", "assessment", "architecture", "bom", "professional-services", "tco", "project-plan", "proposal"],
+  migration:     ["assessment", "architecture", "bom", "professional-services", "tco", "project-plan", "proposal"],
+  greenfield:    ["architecture", "bom", "professional-services", "tco", "project-plan", "proposal"],
+  modernization: ["assessment", "architecture", "bom", "professional-services", "project-plan", "proposal"],
+  dr:            ["architecture", "bom", "professional-services", "project-plan", "proposal"],
+  poc:           ["architecture", "bom", "professional-services", "proposal"],
+  optimization:  ["assessment", "bom", "professional-services", "proposal"],
+  unknown:       ["assessment", "architecture", "bom", "professional-services", "tco", "project-plan", "proposal"],
 };
 
 const CONFIDENCE_CHIP: Record<string, string> = {

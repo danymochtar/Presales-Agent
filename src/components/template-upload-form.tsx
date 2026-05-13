@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 const TYPES = [
-  { value: "customer_study", label: "Customer study" },
   { value: "assessment",     label: "Assessment" },
   { value: "architecture",   label: "Architecture" },
   { value: "bom",            label: "BOM" },

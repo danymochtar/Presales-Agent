@@ -18,7 +18,6 @@ type Template = {
 };
 
 const TYPE_LABELS: Record<string, string> = {
-  customer_study: "Customer study",
   bom: "BOM",
   assessment: "Assessment",
   proposal: "Proposal",

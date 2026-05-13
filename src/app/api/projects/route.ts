@@ -18,7 +18,7 @@ const InputSeed = z.object({
 });
 
 const ProjectTypeEnum = z.enum(["migration", "greenfield", "modernization", "dr", "poc", "optimization", "unknown"]);
-const StageEnum = z.enum(["customer-study", "assessment", "architecture", "bom", "professional-services", "tco", "project-plan", "proposal", "sow", "ms-offering"]);
+const StageEnum = z.enum(["assessment", "architecture", "bom", "professional-services", "tco", "project-plan", "proposal", "sow", "ms-offering"]);
 const PurchaseModelEnum = z.enum(["consumption", "reserved-1y", "reserved-3y", "savings-1y", "savings-3y"]);
 const MigrationStrategyEnum = z.enum(["lift_and_shift", "hybrid", "modernization"]);
 const SolutionAreaEnum = z.enum([

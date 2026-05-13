@@ -14,7 +14,6 @@
 // require upstream (currently SOW → BOM) keep their server-side guard.
 
 export type DeliverableKind =
-  | "customer-study"
   | "assessment"
   | "architecture"
   | "bom"
@@ -92,7 +91,6 @@ export const NEED_LABELS: Record<keyof Prereqs["needs"], string> = {
 // DB-side enum (what Deliverable.type stores) ↔ wizard kind. The DB uses
 // snake_case for historical reasons; the rest of the app uses kebab.
 const DB_TYPE_BY_KIND: Record<DeliverableKind, string> = {
-  "customer-study": "customer_study",
   "assessment": "assessment",
   "architecture": "architecture",
   "bom": "bom",
@@ -117,25 +115,13 @@ export function kindOfDbType(dbType: string): DeliverableKind | undefined {
 }
 
 export const DELIVERABLE_PREREQS: Record<DeliverableKind, Prereqs> = {
-  "customer-study": {
-    kind: "customer-study",
-    label: "Customer study",
-    shortDesc: "Pre-meeting briefing on customer profile, IT landscape, regulatory context, plus suggested Noventiq use cases.",
-    group: "discover",
-    needs: { customer: true, scope: true, inventory: false, clouds: false, regions: false, purchaseModel: false, onPremBaseline: false },
-    // All inputs optional — the agent will research from training data and
-    // propose generic industry use cases when nothing is supplied.
-    optionalFields: ["customer", "scope"],
-    recommendedUpstream: [],
-    hardUpstream: [],
-  },
   "assessment": {
     kind: "assessment",
     label: "Assessment",
-    shortDesc: "Per-workload migration readiness across infra/platform/app/data layers.",
+    shortDesc: "Full-stack readiness — opens with a customer-background executive summary (industry + IT landscape research), then per-workload modernization.",
     group: "discover",
     needs: { customer: true, scope: true, inventory: true, clouds: true, regions: true, purchaseModel: false, onPremBaseline: false },
-    recommendedUpstream: ["customer-study"],
+    recommendedUpstream: [],
     hardUpstream: [],
   },
   "architecture": {
@@ -214,7 +200,6 @@ export const DELIVERABLE_PREREQS: Record<DeliverableKind, Prereqs> = {
 };
 
 export const DELIVERABLES_IN_LIFECYCLE_ORDER: DeliverableKind[] = [
-  "customer-study",
   "assessment",
   "architecture",
   "bom",

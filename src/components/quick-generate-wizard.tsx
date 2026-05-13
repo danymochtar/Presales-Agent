@@ -146,11 +146,6 @@ export function QuickGenerateWizard() {
       setStep("review");
       return;
     }
-    // Customer-study skips the summary card — form is tiny, no value.
-    if (kind === "customer-study") {
-      void runGenerate(effectiveWorkloads);
-      return;
-    }
     setStep("summary");
   }
 
@@ -186,11 +181,7 @@ export function QuickGenerateWizard() {
         ? cloudRegions
         : { azure: { ...MARKET_DEFAULT_REGIONS.azure } };
 
-      const trimmedCustomer = customer.trim();
-      const customerForApi = trimmedCustomer
-        || (kind === "customer-study"
-          ? `(industry pattern${industry ? `: ${industry}` : ""})`
-          : "(quick)");
+      const customerForApi = customer.trim() || "(quick)";
 
       const createRes = await fetch("/api/projects", {
         method: "POST",
@@ -362,7 +353,7 @@ export function QuickGenerateWizard() {
 
           <div className="rounded-md border p-3 space-y-2 text-sm">
             <div className="text-xs uppercase tracking-wider text-muted-foreground">Customer + scope</div>
-            <div><strong>Customer:</strong> {customer.trim() || (kind === "customer-study" ? "(industry pattern)" : "—")}</div>
+            <div><strong>Customer:</strong> {customer.trim() || "—"}</div>
             {industry && <div><strong>Industry:</strong> {industry}</div>}
             {scope && <div className="whitespace-pre-wrap"><strong>Scope notes:</strong> {scope}</div>}
             {!industry && !scope && <div className="text-xs text-muted-foreground">No additional context supplied.</div>}
@@ -477,7 +468,7 @@ export function QuickGenerateWizard() {
         {combinedNeeds.scope && (
           <div className="space-y-1.5">
             <Label htmlFor="scope">
-              {kind === "customer-study" ? "What we already know (optional notes)" : "Scope summary"}
+              Scope summary
               {!isOptional("scope") && <span className="text-destructive ml-0.5">*</span>}
             </Label>
             <textarea
@@ -485,24 +476,18 @@ export function QuickGenerateWizard() {
               value={scope}
               onChange={(e) => setScope(e.target.value)}
               className="w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm"
-              placeholder={kind === "customer-study"
-                ? "Anything you've heard about this customer — recent news, contacts, current footprint, regulator findings. Leave blank to let the agent research from scratch."
-                : "1-2 sentences on what this engagement is about."}
+              placeholder="1-2 sentences on what this engagement is about."
             />
           </div>
         )}
 
         {!combinedNeeds.inventory && (
           <div className="space-y-2">
-            <Label htmlFor="study-files">
-              {kind === "customer-study" ? "Or attach documents (optional)" : "Attach supporting documents (optional)"}
-            </Label>
+            <Label htmlFor="study-files">Attach supporting documents (optional)</Label>
             <p className="text-xs text-muted-foreground">
-              {kind === "customer-study"
-                ? "RFP / RFQ, meeting minutes, customer architecture diagrams, public annual report, regulator findings — anything that can sharpen the briefing."
-                : kind === "architecture"
+              {kind === "architecture"
                 ? "Existing architecture diagrams, RFP, customer IT landscape descriptions, network topology notes — fed to the agent as context for the target-state design."
-                : "RFP, scope notes, customer-provided requirements, prior deliverables to compose from — anything that can sharpen the output."}
+                : "RFP, scope notes, customer-provided requirements, prior deliverables to compose from — anything that can sharpen the output. The agent will research customer background + industry context from these when building the executive summary."}
               {" "}.xlsx, .docx, .pdf, .txt, .md, .csv. 10MB per file.
             </p>
             <input

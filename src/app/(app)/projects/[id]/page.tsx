@@ -9,7 +9,7 @@ import { ProjectModeToggle } from "@/components/project-mode-toggle";
 import { ExtractWorkloadsButton } from "@/components/extract-workloads-button";
 import { SmartWorkflow } from "@/components/smart-workflow";
 import { CloudChip } from "@/components/cloud-chip";
-import { projectTypeLabel, kindOfDbType, type DeliverableKind } from "@/lib/deliverable-prereqs";
+import { projectTypeLabel, kindOfDbType } from "@/lib/deliverable-prereqs";
 import { relTime } from "@/lib/format-time";
 import { eligiblePrograms, topMatchSummary } from "@/lib/funding/eligibility";
 import type { CloudType } from "@/lib/pricing/types";
@@ -34,8 +34,7 @@ const DELIVERABLE_DEFS: Array<{
   group: "discover" | "design" | "commercial" | "delivery";
   groupLabel: string;
 }> = [
-  { type: "customer_study", title: "Customer study",  desc: "Pre-engagement briefing — customer profile + IT landscape",  basePath: (id) => `/projects/${id}/customer-study`, showCloud: false, group: "discover", groupLabel: "Discover" },
-  { type: "assessment",     title: "Assessment",      desc: "Full-stack readiness — infra / platform / app / DB",         basePath: (id) => `/projects/${id}/assessment`,     showCloud: true,  group: "discover", groupLabel: "Discover" },
+  { type: "assessment",     title: "Assessment",      desc: "Customer background + full-stack readiness — exec summary, infra / platform / app / DB",  basePath: (id) => `/projects/${id}/assessment`,     showCloud: true,  group: "discover", groupLabel: "Discover" },
   { type: "architecture",   title: "Architecture",    desc: "Target landing zone + Mermaid diagrams",                     basePath: (id) => `/projects/${id}/architecture`,   showCloud: true,  group: "design",   groupLabel: "Design" },
   { type: "bom",                   title: "BOM",                   desc: "Cloud consumption only — Azure / AWS / GCP line items",     basePath: (id) => `/projects/${id}/bom`,                   showCloud: true,  group: "commercial", groupLabel: "Commercial" },
   { type: "professional_services", title: "Professional services", desc: "Implementation mandays × rate card × margin",               basePath: (id) => `/projects/${id}/professional-services`, showCloud: true,  group: "commercial", groupLabel: "Commercial" },
@@ -86,20 +85,12 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   const hasInventory = project.inputs.some((i) => i.workloadsJson);
 
   const existingByStage: Record<string, string[]> = {};
-  const CLOUD_AGNOSTIC_STAGES = new Set<DeliverableKind>(["customer-study"]);
   function ensureCloud(c: string) {
     if (!existingByStage[c]) existingByStage[c] = [];
   }
   for (const d of project.deliverables) {
     const stage = kindOfDbType(d.type);
     if (!stage) continue;
-    if (CLOUD_AGNOSTIC_STAGES.has(stage)) {
-      for (const c of [...targetClouds, "compare"]) {
-        ensureCloud(c);
-        if (!existingByStage[c].includes(stage)) existingByStage[c].push(stage);
-      }
-      continue;
-    }
     const cloud = d.cloudProvider ?? "azure";
     ensureCloud(cloud);
     if (!existingByStage[cloud].includes(stage)) existingByStage[cloud].push(stage);
