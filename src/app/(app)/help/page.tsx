@@ -57,15 +57,16 @@ export default function HelpPage() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Step-by-step: Full project</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">Step-by-step: Full engagement</CardTitle></CardHeader>
         <CardContent>
           <ol className="text-sm space-y-2 list-decimal pl-5">
             <li>From the dashboard click <strong>Start a new engagement</strong>.</li>
             <li>Upload your files (xlsx, docx, pdf, csv, txt — multiple files OK, 10MB per file).</li>
-            <li>Click <strong>Extract project details</strong>. The agent reads each file and proposes: customer, industry, target cloud, region, project type, and a recommended deliverable flow.</li>
+            <li>Click <strong>Extract engagement details</strong>. The agent reads each file and proposes: customer, industry, target cloud, region, engagement type, and a recommended deliverable flow.</li>
             <li>Review the form. Yellow / red chips next to a field mean the agent isn&apos;t confident — verify those manually. Pick target clouds + regions + purchase model.</li>
-            <li>Click <strong>Create project</strong>. You land on the project detail page.</li>
-            <li>From there, click <strong>Run pipeline</strong> to generate every recommended deliverable, or click an individual card to generate one at a time.</li>
+            <li>Click <strong>Create engagement</strong>. You land on the engagement detail page.</li>
+            <li>From there, click <strong>Generate all recommended deliverables</strong> to run the guided pipeline end-to-end, or click an individual card to generate one at a time.</li>
+            <li>The dashboard <strong>Next actions</strong> rail surfaces the first unchecked MCEM exit-criterion across every open engagement — click any row to jump to the right page.</li>
           </ol>
         </CardContent>
       </Card>
@@ -145,8 +146,36 @@ export default function HelpPage() {
             <li><Link href="/admin/templates" className="underline">Templates</Link> (admin) — upload sample BOM / Proposal / Architecture / SOW. The agent mirrors the structure and voice.</li>
             <li><Link href="/admin/users" className="underline">Users</Link> (admin) — promote the presales head to superadmin so they can manage templates and monitor cost.</li>
             <li><Link href="/admin/usage" className="underline">Usage</Link> (admin) — monitor token usage and estimated AI cost per purpose / per user.</li>
-            <li><Link href="/settings/patterns" className="underline">Learned patterns</Link> — rules the agent picked up during training mode.</li>
+            <li><Link href="/settings/patterns" className="underline">Custom rules</Link> — house-style rules the agent picked up during training mode (originally called &quot;Learned patterns&quot;).</li>
           </ul>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">MCEM at a glance</CardTitle>
+          <CardDescription>
+            Every open engagement is tracked against the Microsoft Customer Engagement Methodology — five phases from
+            first meeting to long-term value. The agent surfaces the current phase&apos;s exit criteria on each
+            engagement and the dashboard&apos;s <strong>Next actions</strong> rail.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ol className="text-sm space-y-1.5 list-decimal pl-5">
+            <li><strong>Listen &amp; Consult</strong> — research the customer, identify pain, map stakeholders, flag compliance, register the opportunity. Exits when the opportunity is qualified.</li>
+            <li><strong>Inspire &amp; Design</strong> — confirm Solution Play, sketch architecture, pick landing-zone archetype, share commercial range. Exits when the customer is aligned to a solution + business case.</li>
+            <li><strong>Empower &amp; Achieve</strong> — POC / pilot, references, formal proposal, BOM sign-off, SOW, terms. Exits when the customer agreement is signed.</li>
+            <li><strong>Realize Value</strong> — project plan, SA + CSM engaged, kickoff, KPI plan, risk log. Exits when the customer is live with metrics in place.</li>
+            <li><strong>Manage &amp; Optimize</strong> — solution health, CSAT/NPS, rightsizing, expansion. Cyclical — feeds back into Phase 1.</li>
+          </ol>
+          <p className="text-xs text-muted-foreground mt-3">
+            Funnel stages (prospecting → qualifying → discovery → proposed → negotiating → closed-won / closed-lost)
+            map onto the five MCEM phases automatically. Open the <strong>MCEM stage check</strong> card on any
+            engagement to tick exit criteria as you complete them.
+          </p>
+          <p className="text-xs text-muted-foreground mt-2">
+            Grounded in <a href="https://learn.microsoft.com/partner-center/referrals/mcem-for-partners" className="underline" target="_blank" rel="noreferrer">learn.microsoft.com/partner-center/referrals/mcem-for-partners</a>.
+          </p>
         </CardContent>
       </Card>
 
@@ -158,12 +187,12 @@ export default function HelpPage() {
             <li><strong>Purchase model:</strong> applied to every cloud in a project (PAYG / Reserved 1y / Reserved 3y / Savings Plan 1y / Savings Plan 3y) so compare-mode totals are fair.</li>
             <li><strong>Migration strategy:</strong> lift-and-shift keeps every workload IaaS; hybrid swaps databases / caches / file shares to PaaS; modernization moves everything possible to PaaS. Non-modernizable workloads (AD DCs, container hosts, Oracle on Azure without contracted licensing) stay IaaS regardless. The BOM auto-detects DB / web / cache / file / AD components from VM names + OS hints and surfaces the PaaS target per cloud.</li>
             <li><strong>Landing zone picker</strong> (after assessment): open the &quot;Landing zone&quot; card on the engagement to pick components. Three archetypes stack on top of each other: <em>Infrastructure</em> (hub-spoke / identity / security / ops — required for every cloud project), <em>Application platform</em> (AKS / App Service / EKS / Cloud Run for modernization), <em>Data + AI</em> (Fabric + Foundry on Azure, Lake Formation + SageMaker + Bedrock on AWS, BigQuery + Vertex AI on GCP). Recommendations are grounded in Azure CAF, AWS Landing Zone Accelerator, and GCP Cloud Foundation. Required components are pre-checked; optional ones are pre-checked when they pair with detected inventory (e.g. App Gateway WAF only when a web tier is uploaded).</li>
-            <li><strong>Training mode:</strong> on the project detail page, switch to <em>training</em>. After generating and giving feedback, the agent extracts patterns into Learned patterns, which then auto-apply to production projects.</li>
+            <li><strong>Training mode:</strong> on the engagement detail page, switch to <em>training</em>. After generating and giving feedback, the agent extracts rules into <Link href="/settings/patterns" className="underline">Custom rules</Link>, which then auto-apply to production engagements.</li>
             <li><strong>Default region:</strong> Malaysia West (Azure) + ap-southeast-5 (AWS). The dropdown lists the full SEA + APAC + US/EU catalog.</li>
             <li><strong>Assessment opens with customer background:</strong> the Executive Summary now does the industry + IT-landscape research that the old standalone Customer Study used to produce. Upload an RFP / notes / public profile and the agent stitches that into Section 1 before scoring readiness. The Proposal reuses the same background when an Assessment is present, or does its own research when running standalone.</li>
             <li><strong>Quick projects can be promoted:</strong> add more uploads or generate more deliverables on the same project to turn it into a full engagement — no need to start over.</li>
             <li><strong>Stuck on naming?</strong> <Link href="/services" className="underline">Services mapping</Link> lists Azure / AWS / GCP equivalents side-by-side across compute, storage, network, database, security, AI, analytics, and more — with explicit gaps where a cloud has no first-party offering.</li>
-            <li><strong>Funding programs (Azure Accelerate / AWS MAP / GCP RaMP)</strong> are encoded in <code>src/lib/funding/programs.ts</code>. Once a project has a BOM, the project detail page shows the top eligible payout as a green chip and the proposal includes a Funding capture section. Refresh the catalog quarterly when MCI / MAP / RaMP terms change.</li>
+            <li><strong>Funding programs (Azure Accelerate / AWS MAP / GCP RaMP)</strong> are encoded in <code>src/lib/funding/programs.ts</code>. Once an engagement has a BOM, the engagement detail page shows the top eligible payout as a green chip and the proposal includes a Funding capture section. Refresh the catalog quarterly when MCI / MAP / RaMP terms change.</li>
             <li><strong><Link href="/pipeline" className="underline">Pipeline tracker</Link>:</strong> consolidates every source tracker (Microsoft biweekly, SMB / SMC / ENT-PS, sales-rep pipes, funding programs) into one view. Upload each source Excel once, map its columns onto the canonical opportunity shape (auto-detected for the common headers), and the consolidated KPI strip rolls up Committed / Upside / At Risk + closing-this-month / quarter. Use the quick-note column to record follow-up notes — typing &quot;at risk&quot;, &quot;won&quot;, &quot;lost&quot;, &quot;upside&quot;, &quot;follow up&quot; or &quot;pending consent&quot; in the note auto-flips the row&apos;s status. Export back to Excel any time to hand to finance or your boss.</li>
           </ul>
         </CardContent>

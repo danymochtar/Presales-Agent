@@ -59,11 +59,11 @@ export default async function SettingsPage() {
         </Card>
         <Card>
           <CardHeader>
-            <CardDescription>Learned patterns</CardDescription>
+            <CardDescription>Custom rules</CardDescription>
             <CardTitle className="text-3xl">{patternCount}</CardTitle>
           </CardHeader>
           <CardContent>
-            <Link href="/settings/patterns" className="text-sm underline">Manage patterns</Link>
+            <Link href="/settings/patterns" className="text-sm underline">Manage rules</Link>
           </CardContent>
         </Card>
       </div>

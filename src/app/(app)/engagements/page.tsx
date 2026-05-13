@@ -6,7 +6,7 @@ import { requireSessionAndTenant } from "@/lib/tenant";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CloudChip } from "@/components/cloud-chip";
-import { stageLabel } from "@/lib/meddpicc";
+import { stageLabel } from "@/lib/mcem";
 
 export default async function ProjectsPage() {
   const session = await auth.api.getSession({ headers: await headers() });

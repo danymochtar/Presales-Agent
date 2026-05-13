@@ -9,20 +9,41 @@ import { CloudChip } from "@/components/cloud-chip";
 
 import { engagementTypeLabel, DELIVERABLE_PREREQS, kindOfDbType } from "@/lib/deliverable-prereqs";
 import { relTime } from "@/lib/format-time";
-import { score as meddpiccScore, healthBand, type Meddpicc, stageLabel, isOpenStage } from "@/lib/meddpicc";
-
-const STAGE_TYPES = ["assessment", "architecture", "bom", "tco", "project_plan", "proposal"];
+import {
+  MCEM_PHASES,
+  PHASE_LABELS,
+  PHASE_SHORT,
+  phaseForStage,
+  nextAction,
+  score as mcemScore,
+  healthBand,
+  stageLabel,
+  isOpenStage,
+  type Mcem,
+  type McemPhase,
+} from "@/lib/mcem";
+import { customerNamesMatch } from "@/lib/pipeline/customer-match";
 
 const deliverableLabel = (dbType: string): string => {
   const k = kindOfDbType(dbType);
   return k ? DELIVERABLE_PREREQS[k].label : dbType;
 };
 
+const PHASE_BAR_COLOR: Record<McemPhase, string> = {
+  listen:  "bg-sky-500",
+  design:  "bg-indigo-500",
+  empower: "bg-violet-500",
+  realize: "bg-emerald-500",
+  manage:  "bg-amber-500",
+};
+
 export default async function DashboardPage() {
   const session = await auth.api.getSession({ headers: await headers() });
   const { user, tenant } = await requireSessionAndTenant(session!.user.id);
 
-  const [projects, recentDeliverables, rateCount, catalogCount, patternCount] = await Promise.all([
+  const SEVEN_DAYS_AGO = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+  const [engagements, recentDeliverables, opportunities, rateCount, catalogCount, patternCount, trackerCount, templateCount] = await Promise.all([
     prisma.engagement.findMany({
       where: { tenantId: tenant.id },
       orderBy: { updatedAt: "desc" },
@@ -32,126 +53,306 @@ export default async function DashboardPage() {
       },
     }),
     prisma.deliverable.findMany({
-      where: { engagement: { tenantId: tenant.id } },
+      where: { engagement: { tenantId: tenant.id }, createdAt: { gte: SEVEN_DAYS_AGO } },
       orderBy: { createdAt: "desc" },
       take: 12,
       include: { engagement: { select: { id: true, name: true } } },
     }),
+    prisma.opportunity.findMany({
+      where: { tracker: { tenantId: tenant.id } },
+      select: { customer: true, valueUsd: true, status: true },
+    }),
     prisma.rateCardItem.count({ where: { tenantId: tenant.id } }),
     prisma.serviceCatalogItem.count({ where: { tenantId: tenant.id } }),
     prisma.learnedPattern.count({ where: { tenantId: tenant.id, active: true } }),
+    prisma.tracker.count({ where: { tenantId: tenant.id } }),
+    prisma.template.count({ where: { tenantId: tenant.id, status: "active" } }),
   ]);
 
-  const activeEngagements = projects.filter((p) => isOpenStage(p.stage));
-  const wonEngagements = projects.filter((p) => p.stage === "closed_won");
-  const totalDeliverables = projects.reduce((s, p) => s + p.deliverables.length, 0);
-  const totalBoms = projects.reduce(
-    (s, p) => s + p.deliverables.filter((d) => d.type === "bom").length,
-    0,
-  );
-  const totalInputs = projects.reduce((s, p) => s + p._count.inputs, 0);
+  const activeEngagements = engagements.filter((e) => isOpenStage(e.stage));
+  const wonEngagements = engagements.filter((e) => e.stage === "closed_won");
+  const totalDeliverables = engagements.reduce((s, e) => s + e.deliverables.length, 0);
 
-  const cloudCounts: Record<string, number> = { azure: 0, aws: 0, gcp: 0, compare: 0, multi: 0 };
-  for (const p of projects) {
-    for (const d of p.deliverables) {
-      const c = d.cloudProvider ?? "azure";
-      cloudCounts[c] = (cloudCounts[c] ?? 0) + 1;
+  // ---------- MCEM pipeline funnel: counts + USD per phase ----------
+  type PhaseRow = { phase: McemPhase; count: number; usd: number };
+  const phaseRows: PhaseRow[] = MCEM_PHASES.map((p) => ({ phase: p, count: 0, usd: 0 }));
+  for (const e of activeEngagements) {
+    const p = phaseForStage(e.stage);
+    const row = phaseRows.find((r) => r.phase === p);
+    if (!row) continue;
+    row.count += 1;
+    // Sum opportunity USD that auto-links to this engagement.
+    for (const o of opportunities) {
+      if (customerNamesMatch(o.customer, e.customer)) {
+        row.usd += Number(o.valueUsd ?? 0);
+      }
     }
   }
 
-  const progressByProject = projects.map((p) => {
-    const stagesPresent = new Set(p.deliverables.map((d) => d.type));
-    const completed = STAGE_TYPES.filter((s) => stagesPresent.has(s)).length;
-    return { project: p, completed, total: STAGE_TYPES.length };
-  });
+  // ---------- Next actions across all open engagements ----------
+  type NextActionRow = {
+    engagementId: string;
+    engagementName: string;
+    customer: string;
+    phase: McemPhase;
+    label: string;
+    actionPath: string;
+  };
+  const nextActions: NextActionRow[] = [];
+  for (const e of activeEngagements) {
+    const na = nextAction(e.mcem as Mcem | null, e.stage);
+    if (!na) continue;
+    const path = (na.actionPath ?? "/engagements/{id}/mcem").replace("{id}", e.id);
+    nextActions.push({
+      engagementId: e.id,
+      engagementName: e.name,
+      customer: e.customer,
+      phase: na.phase,
+      label: na.label,
+      actionPath: path,
+    });
+  }
+  nextActions.splice(6); // cap
 
   const firstName = user.name ? user.name.split(" ")[0] : null;
+  const hasEngagements = engagements.length > 0;
+  const totalActiveUsd = phaseRows.reduce((s, r) => s + r.usd, 0);
+
+  // First-time user checklist
+  const checklist = [
+    { done: rateCount > 0,     label: "Upload your rate card",                   href: "/settings/rate-card" },
+    { done: catalogCount > 0,  label: "Add service catalog entries",             href: "/settings/service-catalog" },
+    { done: templateCount > 0, label: "Drop a sample doc into the Reference library", href: "/library" },
+    { done: trackerCount > 0,  label: "Connect a pipeline source",               href: "/pipeline/trackers/new" },
+    { done: hasEngagements,    label: "Create your first engagement",            href: "/engagements/new" },
+  ];
+  const checklistDone = checklist.filter((c) => c.done).length;
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-semibold">
-            Welcome back{firstName ? `, ${firstName}` : ""}.
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            <Link href="/help" className="underline hover:text-foreground">First time? Open the guide</Link>
-          </p>
-        </div>
-      </div>
+      {/* ───────── Hero ───────── */}
+      <Card className="border-primary/30 bg-gradient-to-br from-primary/[0.07] via-primary/[0.03] to-transparent">
+        <CardContent className="p-5 md:p-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-xs uppercase tracking-wider text-primary font-semibold">
+                Welcome back{firstName ? `, ${firstName}` : ""}
+              </p>
+              <h1 className="text-2xl md:text-3xl font-semibold mt-1 leading-tight">
+                Your unified multicloud presales workspace.
+              </h1>
+              <p className="text-sm md:text-base text-muted-foreground mt-2 max-w-2xl">
+                Listen, design, propose, win — all in one place. Drop customer documents, the agent classifies the
+                engagement, recommends Azure / AWS / GCP solutions, and tracks every MCEM phase from first meeting to
+                closed-won.
+              </p>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <Button asChild size="lg">
+                <Link href="/engagements/new">Start a new engagement →</Link>
+              </Button>
+              <Button asChild variant="outline" size="lg">
+                <Link href="/help">See how it works</Link>
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <Link
+      {/* ───────── 3-tile action row ───────── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <ActionTile
           href="/engagements/new"
-          className="rounded-lg border bg-card p-4 hover:border-primary hover:shadow-sm transition group"
-        >
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <div className="text-xs uppercase tracking-wider text-muted-foreground">Presales engagement</div>
-              <div className="text-base font-semibold mt-0.5 group-hover:text-primary">Create a new engagement →</div>
-            </div>
-            <span className="text-2xl leading-none text-muted-foreground group-hover:text-primary">⇉</span>
-          </div>
-          <p className="text-sm text-muted-foreground mt-2">
-            An engagement tracks one customer opportunity through its presales stages — prospecting, qualifying,
-            discovery, proposed, negotiating — until it closes won (becomes a project) or lost. Auto-links to a
-            pipeline opportunity by customer name when one exists.
-          </p>
-          <p className="text-xs text-muted-foreground mt-2">Use when: new customer opportunity → end-to-end deliverables → close.</p>
-        </Link>
-
-        <Link
+          tag="Full engagement"
+          title="Create a new engagement →"
+          icon="⇉"
+          body="Drop customer documents → the agent classifies the engagement type + recommends deliverables → run the guided pipeline."
+          useWhen="Use for a real opportunity end-to-end."
+        />
+        <ActionTile
           href="/quick"
-          className="rounded-lg border bg-card p-4 hover:border-primary hover:shadow-sm transition group"
-        >
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <div className="text-xs uppercase tracking-wider text-muted-foreground">Quick generate</div>
-              <div className="text-base font-semibold mt-0.5 group-hover:text-primary">One document, just the prereqs →</div>
-            </div>
-            <span className="text-2xl leading-none text-muted-foreground group-hover:text-primary">⚡</span>
-          </div>
-          <p className="text-sm text-muted-foreground mt-2">
-            Pick a single deliverable (BOM, Architecture, SOW…) and supply only what it actually needs.
-            No full project scaffolding.
-          </p>
-          <p className="text-xs text-muted-foreground mt-2">Use when: standalone BOM from inventory, SOW from existing scope, etc.</p>
-        </Link>
+          tag="Quick generate"
+          title="One document in 60 seconds →"
+          icon="⚡"
+          body="Already have inventory or scope? Generate a single BOM / Architecture / SOW / Proposal / TCO without setting up the full engagement."
+          useWhen="Use when you only need one document fast."
+        />
+        <ActionTile
+          href="/pipeline"
+          tag="Pipeline tracker"
+          title="Consolidate every source →"
+          icon="📊"
+          body="Upload your Microsoft biweekly / SMB / SMC / ENT-PS / sales-rep / funding trackers once; see closing-this-month + at-risk consolidated."
+          useWhen="Use to plan your week and report to finance."
+        />
       </div>
 
-      {/* KPI cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KpiCard label="Active engagements" value={activeEngagements.length} sublabel={`${wonEngagements.length} closed won`} />
-        <KpiCard label="Total deliverables" value={totalDeliverables} sublabel="across all engagements" />
-        <KpiCard label="BOMs generated" value={totalBoms} sublabel="across all clouds" />
-        <KpiCard label="Documents uploaded" value={totalInputs} sublabel="across engagements" />
-      </div>
-
-      {/* Active engagements */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>Active engagements</span>
-            {activeEngagements.length > 0 && (
-              <Link href="/engagements" className="text-xs font-normal text-muted-foreground hover:text-foreground">
-                View all →
-              </Link>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {activeEngagements.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No active engagements yet. <Link href="/engagements/new" className="underline">Create one</Link> by uploading customer documents — the agent will classify the engagement and recommend a deliverable flow.
+      {/* ───────── First-time quick-start (hides once any engagement exists) ───────── */}
+      {!hasEngagements && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center justify-between gap-2 flex-wrap">
+              <span>Get set up — quick-start checklist</span>
+              <span className="text-xs text-muted-foreground font-normal">{checklistDone}/{checklist.length} done</span>
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Five short steps the platform needs once. Each unlocks better output downstream. Skip what you don&apos;t need today.
             </p>
-          ) : (
-            <ul className="divide-y">
-              {progressByProject
-                .filter(({ project }) => isOpenStage(project.stage))
-                .slice(0, 5)
-                .map(({ project, completed, total }) => {
+          </CardHeader>
+          <CardContent>
+            <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {checklist.map((c) => (
+                <li key={c.href}>
+                  <Link
+                    href={c.href}
+                    className={`flex items-start gap-2 rounded-md border p-3 hover:border-primary transition ${
+                      c.done ? "bg-emerald-50/40 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-900/40" : ""
+                    }`}
+                  >
+                    <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[11px] font-bold shrink-0 ${
+                      c.done ? "bg-emerald-600 text-white" : "border border-muted-foreground/30 text-muted-foreground"
+                    }`}>
+                      {c.done ? "✓" : ""}
+                    </span>
+                    <span className={`text-sm ${c.done ? "line-through text-muted-foreground" : ""}`}>{c.label}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ───────── Today rail: MCEM funnel | Next actions | This week ───────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        {/* MCEM pipeline by phase */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center justify-between gap-2">
+              <span>MCEM pipeline</span>
+              <span className="text-xs text-muted-foreground font-normal">
+                {activeEngagements.length} open · ${Math.round(totalActiveUsd).toLocaleString()}
+              </span>
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">Open engagements by methodology phase. USD totals from linked pipeline opportunities.</p>
+          </CardHeader>
+          <CardContent>
+            {activeEngagements.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No open engagements yet.</p>
+            ) : (
+              <ul className="space-y-2 text-sm">
+                {phaseRows.map((row) => {
+                  const pct = activeEngagements.length > 0 ? Math.round((row.count / activeEngagements.length) * 100) : 0;
+                  return (
+                    <li key={row.phase}>
+                      <div className="flex justify-between items-baseline mb-1 gap-2">
+                        <span className="font-medium">{PHASE_LABELS[row.phase]}</span>
+                        <span className="text-xs text-muted-foreground tabular-nums">
+                          {row.count} · ${Math.round(row.usd).toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="h-2 bg-muted rounded-full overflow-hidden">
+                        <div className={`h-full ${PHASE_BAR_COLOR[row.phase]}`} style={{ width: `${pct}%` }} />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Next actions */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Next actions</CardTitle>
+            <p className="text-xs text-muted-foreground">First open MCEM exit-criterion per engagement. Click to jump to the right page.</p>
+          </CardHeader>
+          <CardContent>
+            {nextActions.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                {hasEngagements ? "Nothing overdue — every open engagement is on track." : "No open engagements yet. Start one to see your next steps here."}
+              </p>
+            ) : (
+              <ul className="space-y-2 text-sm">
+                {nextActions.map((a, i) => (
+                  <li key={`${a.engagementId}-${i}`}>
+                    <Link href={a.actionPath} className="block rounded-md border p-2 hover:border-primary transition">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="font-medium truncate">{a.label}</span>
+                        <span className="text-[10px] uppercase rounded px-1.5 py-0.5 bg-accent shrink-0">{PHASE_SHORT[a.phase]}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                        {a.engagementName} · {a.customer}
+                      </p>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* This week */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">This week</CardTitle>
+            <p className="text-xs text-muted-foreground">Deliverables generated in the last 7 days.</p>
+          </CardHeader>
+          <CardContent>
+            {recentDeliverables.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nothing generated this week. Open an engagement and generate a deliverable to see it here.</p>
+            ) : (
+              <ul className="space-y-2 text-sm">
+                {recentDeliverables.map((d, i) => (
+                  <li key={`${d.engagement.id}-${d.type}-${i}`} className="flex justify-between gap-2">
+                    <span className="min-w-0 truncate">
+                      <span className="font-medium">{deliverableLabel(d.type)}</span>
+                      {d.cloudProvider && (
+                        <span className="ml-1.5 inline-block align-middle">
+                          <CloudChip cloud={d.cloudProvider} size="xs" />
+                        </span>
+                      )}
+                      <span className="text-muted-foreground"> · </span>
+                      <Link href={`/engagements/${d.engagement.id}`} className="hover:underline">
+                        {d.engagement.name}
+                      </Link>
+                    </span>
+                    <span className="text-xs text-muted-foreground shrink-0">{relTime(d.createdAt)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ───────── Active engagements list ───────── */}
+      {hasEngagements && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span>Active engagements</span>
+              <Link href="/engagements" className="text-xs font-normal text-muted-foreground hover:text-foreground">
+                View all ({engagements.length}) →
+              </Link>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {activeEngagements.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                All engagements are closed. <Link href="/engagements/new" className="underline">Start a new one</Link>.
+              </p>
+            ) : (
+              <ul className="divide-y">
+                {activeEngagements.slice(0, 5).map((project) => {
                   const targetClouds = ((project.targetClouds as string[] | null) ?? ["azure"]).filter((c) => c !== "gcp");
+                  const h = mcemScore(project.mcem as Mcem | null, project.stage);
+                  const band = healthBand(h.totalPct);
+                  const cls = band === "green"
+                    ? "text-emerald-700 dark:text-emerald-300"
+                    : band === "amber" ? "text-amber-700 dark:text-amber-300"
+                    : "text-rose-700 dark:text-rose-300";
                   return (
                     <li key={project.id} className="py-3">
                       <div className="flex items-start justify-between gap-3">
@@ -171,23 +372,12 @@ export default async function DashboardPage() {
                             <div className="flex gap-1">
                               {targetClouds.map((c) => <CloudChip key={c} cloud={c} size="xs" />)}
                             </div>
-                            <ProgressDots completed={completed} total={total} />
-                            <span className="text-xs text-muted-foreground">
-                              {completed}/{total} stages
+                            <span className="text-[10px] uppercase tracking-wider rounded px-1.5 py-0.5 bg-muted">
+                              {stageLabel(project.stage)}
                             </span>
-                            {(() => {
-                              const h = meddpiccScore(project.meddpicc as Meddpicc | null, project.stage);
-                              const band = healthBand(h.totalPct);
-                              const cls = band === "green"
-                                ? "text-emerald-700 dark:text-emerald-300"
-                                : band === "amber" ? "text-amber-700 dark:text-amber-300"
-                                : "text-rose-700 dark:text-rose-300";
-                              return (
-                                <span className={`text-xs ${cls}`} title={h.blockers[0]?.reason ?? "Well qualified"}>
-                                  · MEDDPICC {h.totalPct}%
-                                </span>
-                              );
-                            })()}
+                            <span className={`text-xs ${cls}`} title={h.blockers[0]?.reason ?? "Phase complete"}>
+                              MCEM · {h.phaseLabel} · {h.done}/{h.total} ✓
+                            </span>
                             <span className="text-xs text-muted-foreground">· {relTime(project.updatedAt)}</span>
                           </div>
                         </div>
@@ -198,87 +388,23 @@ export default async function DashboardPage() {
                     </li>
                   );
                 })}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* 2-col: Recent activity + Cloud distribution */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card className="lg:col-span-2">
-          <CardHeader><CardTitle>Recent activity</CardTitle></CardHeader>
-          <CardContent>
-            {recentDeliverables.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No deliverables generated yet. Upload customer docs and run the smart workflow on your first project.
-              </p>
-            ) : (
-              <ul className="space-y-2 text-sm">
-                {recentDeliverables.map((d, i) => (
-                  <li key={`${d.engagement.id}-${d.type}-${i}`} className="flex justify-between gap-3">
-                    <span className="min-w-0">
-                      <span className="text-muted-foreground">Generated </span>
-                      <span className="font-medium">{deliverableLabel(d.type)}</span>
-                      {d.cloudProvider && (
-                        <span className="ml-1.5 inline-block align-middle">
-                          <CloudChip cloud={d.cloudProvider} size="xs" />
-                        </span>
-                      )}
-                      <span className="text-muted-foreground"> for </span>
-                      <Link href={`/engagements/${d.engagement.id}`} className="hover:underline">
-                        {d.engagement.name}
-                      </Link>
-                    </span>
-                    <span className="text-xs text-muted-foreground shrink-0">{relTime(d.createdAt)}</span>
-                  </li>
-                ))}
               </ul>
             )}
           </CardContent>
         </Card>
+      )}
 
-        <Card>
-          <CardHeader><CardTitle>Cloud distribution</CardTitle></CardHeader>
-          <CardContent>
-            {totalDeliverables === 0 ? (
-              <p className="text-sm text-muted-foreground">No deliverables yet.</p>
-            ) : (
-              <ul className="space-y-2.5 text-sm">
-                {(["azure", "aws", "gcp", "compare", "multi"] as const).map((cloud) => {
-                  const count = cloudCounts[cloud] ?? 0;
-                  if (count === 0 && cloud !== "azure" && cloud !== "aws") return null;
-                  const pct = totalDeliverables > 0 ? Math.round((count / totalDeliverables) * 100) : 0;
-                  const barColor =
-                    cloud === "azure" ? "bg-[hsl(214_80%_55%)]" :
-                    cloud === "aws" ? "bg-[hsl(25_90%_55%)]" :
-                    cloud === "gcp" ? "bg-[hsl(142_70%_45%)]" :
-                    "bg-[hsl(270_60%_55%)]";
-                  return (
-                    <li key={cloud}>
-                      <div className="flex justify-between items-baseline mb-1">
-                        <CloudChip cloud={cloud} size="xs" />
-                        <span className="text-xs text-muted-foreground">{count} · {pct}%</span>
-                      </div>
-                      <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                        <div className={`h-full ${barColor}`} style={{ width: `${pct}%` }} />
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
+      {/* ───────── Footer ───────── */}
       <div className="text-xs text-muted-foreground border-t pt-3 flex items-center gap-3 flex-wrap">
         <span>Rate card: <Link href="/settings/rate-card" className="underline">{rateCount} roles</Link></span>
         <span>·</span>
         <span>Service catalog: <Link href="/settings/service-catalog" className="underline">{catalogCount} services</Link></span>
         <span>·</span>
-        <span>Learned patterns: <Link href="/settings/patterns" className="underline">{patternCount} active</Link></span>
+        <span>Custom rules: <Link href="/settings/patterns" className="underline">{patternCount} active</Link></span>
         <span>·</span>
         <Link href="/services" className="underline">Services mapping</Link>
+        <span>·</span>
+        <Link href="/library" className="underline">Reference library</Link>
         <span>·</span>
         <Link href="/settings" className="underline">All settings</Link>
       </div>
@@ -286,27 +412,25 @@ export default async function DashboardPage() {
   );
 }
 
-function KpiCard({ label, value, sublabel }: { label: string; value: number; sublabel?: string }) {
+function ActionTile({
+  href, tag, title, icon, body, useWhen,
+}: {
+  href: string; tag: string; title: string; icon: string; body: string; useWhen: string;
+}) {
   return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="text-xs uppercase tracking-wider text-muted-foreground">{label}</div>
-        <div className="text-3xl font-semibold mt-1 tabular-nums">{value}</div>
-        {sublabel && <div className="text-xs text-muted-foreground mt-0.5">{sublabel}</div>}
-      </CardContent>
-    </Card>
-  );
-}
-
-function ProgressDots({ completed, total }: { completed: number; total: number }) {
-  return (
-    <div className="flex gap-0.5">
-      {Array.from({ length: total }, (_, i) => (
-        <span
-          key={i}
-          className={`h-1.5 w-4 rounded-sm ${i < completed ? "bg-primary" : "bg-muted"}`}
-        />
-      ))}
-    </div>
+    <Link
+      href={href}
+      className="rounded-lg border bg-card p-4 hover:border-primary hover:shadow-md hover:-translate-y-0.5 transition-all group flex flex-col"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-xs uppercase tracking-wider text-muted-foreground">{tag}</div>
+          <div className="text-base font-semibold mt-0.5 group-hover:text-primary">{title}</div>
+        </div>
+        <span className="text-2xl leading-none text-muted-foreground group-hover:text-primary shrink-0">{icon}</span>
+      </div>
+      <p className="text-sm text-muted-foreground mt-2 flex-1">{body}</p>
+      <p className="text-xs text-muted-foreground mt-3 italic">{useWhen}</p>
+    </Link>
   );
 }

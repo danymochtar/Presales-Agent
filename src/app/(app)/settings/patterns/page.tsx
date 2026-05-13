@@ -17,7 +17,7 @@ export default async function PatternsPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Learned patterns</h1>
+        <h1 className="text-2xl font-semibold">Custom rules</h1>
         <Link href="/settings" className="text-sm underline">← Back to settings</Link>
       </div>
       <Card>
