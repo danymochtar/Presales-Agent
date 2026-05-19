@@ -99,8 +99,18 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     if (!targetClouds.includes(cloudParam as CloudType)) {
       return new Response(`cloud "${cloudParam}" is not in this project's targetClouds`, { status: 400 });
     }
-    if (cloudParam === "gcp") return new Response("GCP pricing deferred — defer to MVP 14+", { status: 501 });
     cloudsToPrice = [cloudParam as CloudType];
+  }
+  // GCP requires a Cloud Billing API key — surface a clear error early
+  // instead of producing a BOM full of "GCP pricing not found" rows.
+  if (cloudsToPrice.includes("gcp")) {
+    const integrations = (project.tenant.integrations ?? {}) as { gcp?: { apiKey?: string } };
+    if (!integrations.gcp?.apiKey && !process.env.GCP_BILLING_API_KEY) {
+      return new Response(
+        "GCP pricing needs a Cloud Billing API key. Configure it on /admin → CRM connector & integrations → GCP, or set GCP_BILLING_API_KEY in your environment.",
+        { status: 412 },
+      );
+    }
   }
 
   const fxRate = fxRateOrFallback("MYR", project.tenant.fxMyrPerUsd);
@@ -129,9 +139,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     // in parallel so the BOM can render a side-by-side commitment table.
     // The chosen `purchaseModel` is what we treat as the "headline" price.
     const emptyAllTerms = (): Record<string, Awaited<ReturnType<typeof batchPriceComputeAllTerms>>[string]> => ({});
+    const priceOpts = {
+      tenantIntegrations: (project.tenant.integrations ?? {}) as { gcp?: { apiKey?: string } },
+    };
     const [linuxAllTerms, winAllTerms] = await Promise.all([
-      linuxSkus.length ? batchPriceComputeAllTerms(cloud, linuxSkus, region, "linux") : Promise.resolve(emptyAllTerms()),
-      winSkus.length ? batchPriceComputeAllTerms(cloud, winSkus, region, "windows") : Promise.resolve(emptyAllTerms()),
+      linuxSkus.length ? batchPriceComputeAllTerms(cloud, linuxSkus, region, "linux", priceOpts) : Promise.resolve(emptyAllTerms()),
+      winSkus.length ? batchPriceComputeAllTerms(cloud, winSkus, region, "windows", priceOpts) : Promise.resolve(emptyAllTerms()),
     ]);
     const linuxPrices: Record<string, ComputeQuoteResult> = Object.fromEntries(
       Object.entries(linuxAllTerms).map(([sku, r]) => [sku, r.byTerm[purchaseModel]]),

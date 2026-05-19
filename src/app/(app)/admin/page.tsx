@@ -4,17 +4,27 @@ import { getSuperadminContextForPage } from "@/lib/admin";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ResetWorkspaceButton } from "@/components/reset-workspace-button";
 import { CreatioIntegrationCard } from "@/components/creatio-integration-card";
+import { GcpIntegrationCard } from "@/components/gcp-integration-card";
 import type { CreatioCredentials } from "@/lib/integrations/creatio";
 
 export default async function AdminOverviewPage() {
   const ctx = (await getSuperadminContextForPage())!;
-  const integrations = (ctx.tenant.integrations ?? {}) as { creatio?: CreatioCredentials };
+  const integrations = (ctx.tenant.integrations ?? {}) as {
+    creatio?: CreatioCredentials;
+    gcp?: { apiKey?: string; useLivePricing?: boolean };
+  };
   const creatioInitial = integrations.creatio
     ? {
         baseUrl: integrations.creatio.baseUrl,
         username: integrations.creatio.username,
         passwordSet: !!integrations.creatio.password,
         lastSyncAt: integrations.creatio.lastSyncAt ?? null,
+      }
+    : null;
+  const gcpInitial = integrations.gcp
+    ? {
+        apiKeySet: !!integrations.gcp.apiKey,
+        useLivePricing: integrations.gcp.useLivePricing ?? true,
       }
     : null;
   const [templateCount, activeTemplates, llmCallCount, llmCallLast30dCount, userCount, projectCount] = await Promise.all([
@@ -101,6 +111,24 @@ export default async function AdminOverviewPage() {
         </CardHeader>
         <CardContent>
           <CreatioIntegrationCard initial={creatioInitial} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Cloud pricing — GCP (Cloud Billing Catalog API)</CardTitle>
+          <CardDescription>
+            Connect a Google Cloud project to pull live Compute Engine list prices for GCP BOMs. Without a key,
+            GCP BOM generation returns a 412 with a setup hint. The integration uses the public Cloud Billing
+            Catalog API — vCPU and RAM are priced as separate SKUs, so the agent fetches both per region and
+            multiplies by the recommended machine type&apos;s shape. Cached in-process for 24h to avoid hammering
+            the catalog. Setup: <code>console.cloud.google.com</code> → APIs &amp; Services → Library → enable
+            <em> Cloud Billing API</em> → Credentials → Create API key → Restrict key → API restrictions →
+            select <em>Cloud Billing API</em> only. Paste the key below.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <GcpIntegrationCard initial={gcpInitial} />
         </CardContent>
       </Card>
 

@@ -12,6 +12,12 @@
 // Always verify against AWS Pricing Calculator before sending a customer-facing BOM.
 
 import type { ComputeQuoteResult, OsType, StorageQuote, Term } from "./types";
+import { getAwsLiveVmPrice, batchAwsLiveVmPrices } from "./aws-live";
+
+// Feature flag — set to false to skip the live API and use only the hardcoded
+// reference table (useful for offline tests / cost-control). Defaults to true
+// so production picks up authoritative public list prices automatically.
+const USE_LIVE_AWS_PRICING = process.env.AWS_LIVE_PRICING !== "false";
 
 type RegionInfo = { multiplier: number; available: boolean; label: string; note?: string };
 
@@ -96,7 +102,7 @@ export function listAwsRegions() {
   };
 }
 
-export function getAwsVmPrice(
+function getAwsVmPriceFallback(
   instanceType: string,
   region: string,
   os: OsType = "linux",
@@ -164,14 +170,41 @@ export function getAwsVmPrice(
   };
 }
 
-export function batchAwsVmPrices(
+// Public API. Tries live Price List Bulk API first when enabled; falls back
+// to the hardcoded reference table on any failure (network error, region
+// not yet in the offer file, SKU + attribute filter no-match). Async now —
+// callers were already awaiting the old sync export so this is safe.
+export async function getAwsVmPrice(
+  instanceType: string,
+  region: string,
+  os: OsType = "linux",
+  term: Term = "consumption",
+): Promise<ComputeQuoteResult> {
+  if (USE_LIVE_AWS_PRICING) {
+    const live = await getAwsLiveVmPrice({ instanceType, region, os, term });
+    if (live) return live;
+  }
+  return getAwsVmPriceFallback(instanceType, region, os, term);
+}
+
+export async function batchAwsVmPrices(
   instanceTypes: string[],
   region: string,
   os: OsType = "linux",
   term: Term = "consumption",
-): Record<string, ComputeQuoteResult> {
+): Promise<Record<string, ComputeQuoteResult>> {
   const unique = [...new Set(instanceTypes)];
-  return Object.fromEntries(unique.map((t) => [t, getAwsVmPrice(t, region, os, term)]));
+  if (USE_LIVE_AWS_PRICING) {
+    const live = await batchAwsLiveVmPrices(unique, region, os, term);
+    // Map: live result when found, fallback for any null entries.
+    const out: Record<string, ComputeQuoteResult> = {};
+    for (const sku of unique) {
+      const r = live[sku];
+      out[sku] = r ?? getAwsVmPriceFallback(sku, region, os, term);
+    }
+    return out;
+  }
+  return Object.fromEntries(unique.map((t) => [t, getAwsVmPriceFallback(t, region, os, term)]));
 }
 
 export function getAwsEbsPrice(volumeType: string, region: string, gb: number): StorageQuote {
