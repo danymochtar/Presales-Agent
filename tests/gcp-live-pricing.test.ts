@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { getGcpLiveVmPrice, batchGcpLiveVmPrices, _resetGcpCache } from "@/lib/pricing/gcp";
+import type { ComputeQuoteFound, ComputeQuoteResult } from "@/lib/pricing/types";
+
+function mustFound(r: ComputeQuoteResult | null): ComputeQuoteFound {
+  expect(r).not.toBeNull();
+  expect(r!.found).toBe(true);
+  return r as ComputeQuoteFound;
+}
 
 // nanos: 1 USD = 1e9 nanos. 0.031611 USD = 31_611_000 nanos.
 function fakeSkus() {
@@ -115,23 +122,20 @@ describe("gcp-live pricing", () => {
   });
 
   it("prices n2-standard-2 in asia-southeast1 from vCPU+RAM components", async () => {
-    const r = await getGcpLiveVmPrice({
+    const r = mustFound(await getGcpLiveVmPrice({
       instanceType: "n2-standard-2",
       region: "asia-southeast1",
       apiKey: "fake",
-    });
-    expect(r).not.toBeNull();
-    expect(r!.cloud).toBe("gcp");
+    }));
+    expect(r.cloud).toBe("gcp");
     // 2 vCPU * 0.031611 + 8 GB * 0.004237 = 0.063222 + 0.033896 = 0.097118 ≈ 0.0971
-    expect(r!.hourlyUsd).toBeCloseTo(0.0971, 3);
+    expect(r.hourlyUsd).toBeCloseTo(0.0971, 3);
   });
 
   it("scales with shape — n2-standard-8 ≈ 4× the n2-standard-2 price", async () => {
-    const small = await getGcpLiveVmPrice({ instanceType: "n2-standard-2", region: "asia-southeast1", apiKey: "k" });
-    const large = await getGcpLiveVmPrice({ instanceType: "n2-standard-8", region: "asia-southeast1", apiKey: "k" });
-    expect(small).not.toBeNull();
-    expect(large).not.toBeNull();
-    expect(large!.hourlyUsd / small!.hourlyUsd).toBeCloseTo(4, 1);
+    const small = mustFound(await getGcpLiveVmPrice({ instanceType: "n2-standard-2", region: "asia-southeast1", apiKey: "k" }));
+    const large = mustFound(await getGcpLiveVmPrice({ instanceType: "n2-standard-8", region: "asia-southeast1", apiKey: "k" }));
+    expect(large.hourlyUsd / small.hourlyUsd).toBeCloseTo(4, 1);
   });
 
   it("returns null for an unknown instance type", async () => {
@@ -151,16 +155,15 @@ describe("gcp-live pricing", () => {
   });
 
   it("uses Commit1Yr SKUs for reserved-1y term", async () => {
-    const r = await getGcpLiveVmPrice({
+    const r = mustFound(await getGcpLiveVmPrice({
       instanceType: "n2-standard-2",
       region: "asia-southeast1",
       apiKey: "k",
       term: "reserved-1y",
-    });
-    expect(r).not.toBeNull();
+    }));
     // 2 * 0.019907 + 8 * 0.002669 = 0.039814 + 0.021352 = 0.061166 ≈ 0.0612
-    expect(r!.hourlyUsd).toBeCloseTo(0.0612, 3);
-    expect(r!.notes.join(" ")).toMatch(/Commit/);
+    expect(r.hourlyUsd).toBeCloseTo(0.0612, 3);
+    expect((r.notes ?? []).join(" ")).toMatch(/Commit/);
   });
 
   it("batches against a single catalog fetch", async () => {

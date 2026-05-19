@@ -44,11 +44,12 @@ export default async function DashboardPage() {
   const session = await auth.api.getSession({ headers: await headers() });
   const { user, tenant } = await requireSessionAndTenant(session!.user.id);
 
-  // First-login gate: the dashboard pivots every KPI off a fiscal calendar +
-  // a master customer list. Until both are defined, ship the user to /setup.
+  // First-login gate: only the fiscal year is required (it anchors every
+  // date pivot). Pipeline upload is optional — the cost-assessment headline
+  // works without trackers.
   const fy: FiscalYearConfig | null = isFiscalYearConfig(tenant.fiscalYear) ? tenant.fiscalYear : null;
+  if (!fy) redirect("/setup");
   const trackerCount = await prisma.tracker.count({ where: { tenantId: tenant.id } });
-  if (!fy || trackerCount === 0) redirect("/setup");
 
   const thresholds = tenantThresholds(tenant);
   const SEVEN_DAYS_AGO = new Date(Date.now() - thresholds.dashboardLookbackDays * 24 * 60 * 60 * 1000);
@@ -116,9 +117,17 @@ export default async function DashboardPage() {
     };
   });
   const bomTotalsPerCloud: Record<string, number> = {};
+  const bomMonthlyPerCloud: Record<string, number> = {};
   for (const r of bomTileRows) {
     bomTotalsPerCloud[r.cloud] = (bomTotalsPerCloud[r.cloud] ?? 0) + r.annualUsd;
+    bomMonthlyPerCloud[r.cloud] = (bomMonthlyPerCloud[r.cloud] ?? 0) + r.monthlyUsd;
   }
+  const bomAnnualGrandTotal = Object.values(bomTotalsPerCloud).reduce((a, b) => a + b, 0);
+  const bomMonthlyGrandTotal = Object.values(bomMonthlyPerCloud).reduce((a, b) => a + b, 0);
+  // Total BOMs ever generated for this tenant (drives the headline counter).
+  const allTimeBomCount = await prisma.deliverable.count({
+    where: { engagement: { tenantId: tenant.id }, type: "bom" },
+  });
 
   const activeEngagements = engagements.filter((e) => isOpenStage(e.stage));
   const wonEngagements = engagements.filter((e) => e.stage === "closed_won");
@@ -169,20 +178,22 @@ export default async function DashboardPage() {
   const hasEngagements = engagements.length > 0;
   const totalActiveUsd = phaseRows.reduce((s, r) => s + r.usd, 0);
 
-  // First-time user checklist
+  // First-time user checklist — ordered for cost-assessment-first onboarding.
+  // Pipeline source is flagged optional since BOMs don't need it.
   const checklist = [
-    { done: rateCount > 0,     label: "Upload your rate card",                   href: "/settings/rate-card" },
-    { done: catalogCount > 0,  label: "Add service catalog entries",             href: "/settings/service-catalog" },
-    { done: templateCount > 0, label: "Drop a sample doc into the Reference library", href: "/library" },
-    { done: trackerCount > 0,  label: "Connect a pipeline source",               href: "/pipeline/trackers/new" },
-    { done: hasEngagements,    label: "Create your first engagement",            href: "/engagements/new" },
+    { done: hasEngagements,    label: "Create your first engagement",            href: "/engagements/new",          optional: false },
+    { done: bomTileRows.length > 0, label: "Generate your first BOM",            href: hasEngagements ? "/engagements" : "/engagements/new", optional: false },
+    { done: rateCount > 0,     label: "Upload your rate card (mandays pricing)", href: "/settings/rate-card",       optional: false },
+    { done: catalogCount > 0,  label: "Add service catalog entries",             href: "/settings/service-catalog", optional: false },
+    { done: templateCount > 0, label: "Drop a sample doc into the Reference library", href: "/library",            optional: true  },
+    { done: trackerCount > 0,  label: "Connect a pipeline source",               href: "/pipeline/trackers/new",    optional: true  },
   ];
   const checklistDone = checklist.filter((c) => c.done).length;
 
   return (
     <div className="space-y-6">
-      {/* ───────── Hero ───────── */}
-      <Card className="border-primary/30 bg-gradient-to-br from-primary/[0.07] via-primary/[0.03] to-transparent">
+      {/* ───────── Hero — cost-assessment focused ───────── */}
+      <Card className="border-primary/30 bg-gradient-to-br from-primary/[0.07] via-primary/[0.03] to-transparent overflow-hidden">
         <CardContent className="p-5 md:p-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="min-w-0">
@@ -193,110 +204,194 @@ export default async function DashboardPage() {
                 </span>
               </p>
               <h1 className="text-2xl md:text-3xl font-semibold mt-1 leading-tight">
-                Your unified multicloud presales workspace.
+                Multicloud cost assessment, built for presales.
               </h1>
               <p className="text-sm md:text-base text-muted-foreground mt-2 max-w-2xl">
-                Listen, design, propose, win — all in one place. Drop customer documents, the agent classifies the
-                engagement, recommends Azure / AWS / GCP solutions, and tracks every MCEM phase from first meeting to
-                closed-won.
+                Drop a customer inventory → the agent sizes workloads, picks the right SKUs across
+                <span className="font-medium text-foreground"> Azure · AWS · GCP</span>, and prices them against
+                live retail catalogs. Compare clouds side-by-side, model 1y/3y commitments, and export
+                a board-ready BOM in minutes.
               </p>
             </div>
-            <div className="flex gap-2 shrink-0">
-              <Button asChild size="lg">
-                <Link href="/engagements/new">Start a new engagement →</Link>
+            <div className="flex flex-col gap-2 shrink-0">
+              <Button asChild size="lg" className="shadow-md">
+                <Link href={hasEngagements ? "/engagements" : "/engagements/new"}>
+                  {hasEngagements ? "Open an engagement →" : "Start your first BOM →"}
+                </Link>
               </Button>
-              <Button asChild variant="outline" size="lg">
-                <Link href="/help">See how it works</Link>
+              <Button asChild variant="outline" size="sm">
+                <Link href="/help">How it works</Link>
               </Button>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* ───────── BOM headline tile ───────── */}
-      <Card className="border-primary/20">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2 flex-wrap">
-            <span>🧾 BOM pipeline</span>
-            <HelpTooltip text="Per-cloud annual cost rolled up across every BOM generated this tenant. Each row shows the latest BOM per engagement with monthly + annual USD pulled from the stored line-items + landing-zone baseline. Click to open the BOM workspace." />
-            <span className="text-xs font-normal text-muted-foreground">
-              {bomTileRows.length} recent BOM{bomTileRows.length === 1 ? "" : "s"}
-            </span>
-          </CardTitle>
-          <p className="text-xs text-muted-foreground">
-            The headline deliverable — Azure / AWS cost models grounded in live retail prices + Reference list pricing for landing-zone components. Drives the proposal conversation.
-          </p>
+      {/* ───────── COST ASSESSMENT — headline ───────── */}
+      <Card className="border-primary/40 bg-gradient-to-br from-card via-card to-primary/[0.02] shadow-sm">
+        <CardHeader className="pb-3">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-primary font-semibold">
+                Headline · cost assessment
+              </p>
+              <CardTitle className="text-lg md:text-xl flex items-center gap-2 mt-1">
+                <span>Your multicloud BOM pipeline</span>
+                <HelpTooltip text="Per-cloud annual cost rolled up across every BOM generated this tenant. Each row is the latest BOM per engagement with monthly + annual USD from stored line-items + landing-zone baseline. Click to open the BOM workspace." />
+              </CardTitle>
+              <p className="text-xs text-muted-foreground mt-1">
+                Live retail prices from Azure Retail · AWS Price List Bulk · GCP Cloud Billing Catalog. Compare clouds, swap commitment terms, export to Excel.
+              </p>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              <Button asChild size="sm">
+                <Link href="/engagements/new">+ New BOM</Link>
+              </Button>
+              {bomTileRows.length > 0 && (
+                <Button asChild size="sm" variant="outline">
+                  <Link href="/engagements">All BOMs</Link>
+                </Button>
+              )}
+            </div>
+          </div>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-4">
           {bomTileRows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No BOMs generated yet. <Link href="/engagements/new" className="underline">Create an engagement</Link>, upload an inventory, then run the BOM generator on the engagement page.
-            </p>
+            <div className="rounded-lg border border-dashed bg-muted/30 p-6 text-center space-y-3">
+              <div className="text-3xl">📊</div>
+              <p className="text-sm font-medium">No BOMs generated yet</p>
+              <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                Start an engagement, drop an inventory (CSV / Excel / discovery report), and the agent will size
+                workloads, recommend SKUs, and price them against Azure / AWS / GCP retail catalogs.
+              </p>
+              <div className="flex justify-center gap-2 pt-1">
+                <Button asChild size="sm">
+                  <Link href="/engagements/new">Create your first engagement →</Link>
+                </Button>
+                <Button asChild size="sm" variant="outline">
+                  <Link href="/help">See a sample</Link>
+                </Button>
+              </div>
+            </div>
           ) : (
             <>
-              {Object.keys(bomTotalsPerCloud).length > 0 && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {/* Grand total + per-cloud cost chips */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div className="rounded-lg border bg-primary/[0.06] border-primary/30 p-3 md:col-span-1">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">All clouds · annual</p>
+                  <p className="text-2xl md:text-3xl font-semibold tabular-nums mt-1">
+                    ${Math.round(bomAnnualGrandTotal).toLocaleString()}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 tabular-nums">
+                    ${Math.round(bomMonthlyGrandTotal).toLocaleString()}/mo · {allTimeBomCount} BOM{allTimeBomCount === 1 ? "" : "s"} all-time
+                  </p>
+                </div>
+                <div className="md:col-span-3 grid grid-cols-2 md:grid-cols-3 gap-2">
                   {(["azure", "aws", "gcp", "compare"] as const).map((c) => {
                     const total = bomTotalsPerCloud[c];
+                    const monthly = bomMonthlyPerCloud[c];
+                    const share = bomAnnualGrandTotal > 0 ? Math.round(((total ?? 0) / bomAnnualGrandTotal) * 100) : 0;
                     if (!total) return null;
                     return (
-                      <div key={c} className="rounded-md border p-3">
+                      <Link
+                        key={c}
+                        href={`/engagements?cloud=${c}`}
+                        className="rounded-lg border p-3 hover:border-primary hover:shadow-sm transition group block"
+                      >
                         <div className="flex items-center justify-between gap-2">
                           <CloudChip cloud={c} size="xs" />
-                          <span className="text-[10px] text-muted-foreground uppercase">Annual</span>
+                          <span className="text-[10px] text-muted-foreground tabular-nums">{share}%</span>
                         </div>
-                        <div className="text-lg font-semibold tabular-nums mt-1">${Math.round(total).toLocaleString()}</div>
-                      </div>
+                        <p className="text-lg font-semibold tabular-nums mt-1 group-hover:text-primary">
+                          ${Math.round(total).toLocaleString()}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground tabular-nums">
+                          ${Math.round(monthly ?? 0).toLocaleString()}/mo · annual list
+                        </p>
+                        <div className="h-1 mt-2 bg-muted rounded-full overflow-hidden">
+                          <div className="h-full bg-primary/60" style={{ width: `${share}%` }} />
+                        </div>
+                      </Link>
                     );
                   })}
                 </div>
-              )}
-              <ul className="divide-y border rounded-md">
-                {bomTileRows.slice(0, 5).map((r) => (
-                  <li key={r.id}>
-                    <Link
-                      href={`/engagements/${r.engagementId}/bom?cloud=${r.cloud}&v=${r.version}`}
-                      className="block px-3 py-2 hover:bg-accent transition"
-                    >
-                      <div className="flex items-center justify-between gap-2 flex-wrap text-sm">
-                        <span className="flex items-center gap-2 flex-wrap min-w-0">
-                          <CloudChip cloud={r.cloud} size="xs" />
-                          <span className="font-medium truncate">{r.customer}</span>
-                          <span className="text-muted-foreground truncate">{r.engagementName}</span>
-                          <span className="text-[10px] uppercase rounded px-1.5 py-0.5 bg-accent">v{r.version}</span>
-                        </span>
-                        <span className="text-xs tabular-nums text-muted-foreground">
-                          <span className="font-medium text-foreground">${Math.round(r.monthlyUsd).toLocaleString()}/mo</span>
-                          <span> · ${Math.round(r.annualUsd).toLocaleString()}/yr · {relTime(r.createdAt)}</span>
-                        </span>
-                      </div>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+              </div>
+
+              {/* Recent BOMs feed */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs uppercase tracking-wider text-muted-foreground font-medium">Recent BOMs</p>
+                  <span className="text-[10px] text-muted-foreground">latest version per engagement</span>
+                </div>
+                <ul className="divide-y border rounded-lg overflow-hidden">
+                  {bomTileRows.slice(0, 5).map((r) => (
+                    <li key={r.id}>
+                      <Link
+                        href={`/engagements/${r.engagementId}/bom?cloud=${r.cloud}&v=${r.version}`}
+                        className="block px-3 py-2.5 hover:bg-accent transition group"
+                      >
+                        <div className="flex items-center justify-between gap-2 flex-wrap text-sm">
+                          <span className="flex items-center gap-2 flex-wrap min-w-0">
+                            <CloudChip cloud={r.cloud} size="xs" />
+                            <span className="font-medium truncate group-hover:text-primary">{r.customer}</span>
+                            <span className="text-muted-foreground truncate">{r.engagementName}</span>
+                            <span className="text-[10px] uppercase rounded px-1.5 py-0.5 bg-accent">v{r.version}</span>
+                          </span>
+                          <span className="text-xs tabular-nums text-muted-foreground">
+                            <span className="font-semibold text-foreground">${Math.round(r.monthlyUsd).toLocaleString()}/mo</span>
+                            <span className="hidden md:inline"> · ${Math.round(r.annualUsd).toLocaleString()}/yr</span>
+                            <span> · {relTime(r.createdAt)}</span>
+                          </span>
+                        </div>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </>
           )}
         </CardContent>
       </Card>
 
-      {/* ───────── 2-tile action row ───────── */}
+      {/* ───────── Quick actions row ───────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <ActionTile
           href="/engagements/new"
           tag="New engagement"
           title="Capture customer data →"
           icon="⇉"
-          body="Drop customer documents → the agent extracts customer + scope + cloud and creates the engagement. Generate any deliverable (BOM / Architecture / SOW / Proposal / TCO) from the engagement page whenever you need it — one at a time or the full guided pipeline."
+          body="Drop customer documents → the agent extracts customer + scope + cloud and creates the engagement. Generate any deliverable (BOM / Architecture / SOW / Proposal / TCO) from the engagement page."
           useWhen="Every new customer opportunity starts here."
         />
-        <ActionTile
-          href="/pipeline"
-          tag="Pipeline tracker"
-          title="Consolidate every source →"
-          icon="📊"
-          body="Upload your Microsoft biweekly / SMB / SMC / ENT-PS / sales-rep / funding trackers once; see closing-this-month + at-risk consolidated."
-          useWhen="Use to plan your week and report to finance."
-        />
+        {trackerCount > 0 ? (
+          <ActionTile
+            href="/pipeline"
+            tag="Pipeline tracker"
+            title="Consolidate every source →"
+            icon="📊"
+            body="Microsoft biweekly · SMB / SMC / ENT-PS · sales-rep · funding (MAP / Accelerate / RaMP). See closing-this-month + at-risk consolidated."
+            useWhen="Use to plan your week and report to finance."
+          />
+        ) : (
+          <Link
+            href="/pipeline/trackers/new"
+            className="rounded-lg border border-dashed bg-muted/20 p-4 hover:border-primary hover:bg-muted/40 transition-all flex flex-col"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="text-xs uppercase tracking-wider text-muted-foreground">Optional · do later</div>
+                <div className="text-base font-semibold mt-0.5">Connect a pipeline →</div>
+              </div>
+              <span className="text-2xl leading-none text-muted-foreground shrink-0">📥</span>
+            </div>
+            <p className="text-sm text-muted-foreground mt-2 flex-1">
+              Skipped at setup. Upload your Microsoft / SMB / sales-rep trackers — or connect Creatio CRM on
+              <code className="text-[11px] mx-1 px-1 py-0.5 rounded bg-background border">/admin</code> — to unlock the
+              Business dashboard and the FY-target customer picker.
+            </p>
+            <p className="text-xs text-muted-foreground mt-3 italic">Cost assessment works fine without this.</p>
+          </Link>
+        )}
       </div>
 
       {/* ───────── First-time quick-start (hides once any engagement exists) ───────── */}
@@ -326,7 +421,12 @@ export default async function DashboardPage() {
                     }`}>
                       {c.done ? "✓" : ""}
                     </span>
-                    <span className={`text-sm ${c.done ? "line-through text-muted-foreground" : ""}`}>{c.label}</span>
+                    <span className={`text-sm flex-1 ${c.done ? "line-through text-muted-foreground" : ""}`}>
+                      {c.label}
+                      {c.optional && !c.done && (
+                        <span className="ml-1.5 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">· optional</span>
+                      )}
+                    </span>
                   </Link>
                 </li>
               ))}

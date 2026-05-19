@@ -9,11 +9,11 @@ import { Button } from "@/components/ui/button";
 import { FiscalYearSetupForm } from "@/components/fiscal-year-setup-form";
 import { isFiscalYearConfig, type FiscalYearConfig } from "@/lib/fiscal-year";
 
-// Two required steps:
-//   1. Define the fiscal year
-//   2. Connect at least one pipeline source (so the customer list isn't empty)
-// Both must be done before the dashboard becomes reachable. The layout gate
-// redirects every other route to /setup until both are true.
+// Setup gate — only the fiscal year is required to reach the dashboard.
+// Pipeline upload (step 2) is OPTIONAL: it powers the Business / Targets
+// views and the customer picker on new engagements, but isn't needed for
+// the headline feature (multicloud cost assessment / BOM generation).
+// Users can configure it any time from Pipeline → Trackers or /admin.
 
 export default async function SetupPage() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -26,20 +26,21 @@ export default async function SetupPage() {
 
   const fyDone = !!fy;
   const pipelineDone = trackerCount > 0;
-  const allDone = fyDone && pipelineDone;
+  // Only the fiscal year is required. Pipeline upload is optional and
+  // surfaced as a non-blocking nudge — the dashboard works without it.
+  const canContinue = fyDone;
 
-  // If we landed on /setup after everything's defined (e.g. user navigated
-  // here directly), drop them on the dashboard so this page isn't sticky.
-  if (allDone) redirect("/dashboard");
+  if (canContinue && pipelineDone) redirect("/dashboard");
 
   return (
     <div className="space-y-6 max-w-3xl mx-auto">
       <div>
         <p className="text-xs uppercase tracking-wider text-primary font-semibold">First-time setup</p>
-        <h1 className="text-2xl md:text-3xl font-semibold mt-1">Two things before the dashboard opens.</h1>
+        <h1 className="text-2xl md:text-3xl font-semibold mt-1">One quick thing before the dashboard opens.</h1>
         <p className="text-sm text-muted-foreground mt-2">
-          Welcome{user.name ? `, ${user.name.split(" ")[0]}` : ""}. The workspace needs two facts to anchor every
-          KPI, forecast, and plan view. Set them once — you can always edit later from <Link href="/settings" className="underline">Settings</Link>.
+          Welcome{user.name ? `, ${user.name.split(" ")[0]}` : ""}. Define your fiscal year and you&apos;re in —
+          the cost-assessment workspace works the moment that&apos;s saved. The pipeline upload below is optional
+          and can be set up later from <Link href="/settings" className="underline">Settings</Link>.
         </p>
       </div>
 
@@ -62,18 +63,24 @@ export default async function SetupPage() {
         </CardContent>
       </Card>
 
-      {/* Step 2 — Pipeline */}
+      {/* Step 2 — Pipeline (OPTIONAL) */}
       <Card className={pipelineDone ? "border-emerald-300 bg-emerald-50/40 dark:bg-emerald-900/10" : !fyDone ? "opacity-60" : ""}>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${pipelineDone ? "bg-emerald-600 text-white" : fyDone ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+          <CardTitle className="flex items-center gap-2 flex-wrap">
+            <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${pipelineDone ? "bg-emerald-600 text-white" : fyDone ? "bg-muted-foreground/30 text-foreground" : "bg-muted text-muted-foreground"}`}>
               {pipelineDone ? "✓" : "2"}
             </span>
-            Upload your foundation pipelines — previous FY + future targets
+            <span>Upload your foundation pipelines — previous FY + future targets</span>
+            {!pipelineDone && (
+              <span className="text-[10px] uppercase tracking-wider rounded-full px-2 py-0.5 bg-muted text-muted-foreground font-normal">
+                Optional · do later
+              </span>
+            )}
           </CardTitle>
           <CardDescription>
-            Two foundational uploads teach the agent your book of business. You can add more pipe docs later;
-            these two are the minimum.
+            Two foundational uploads teach the agent your book of business and power the <em>Business</em> / pipeline
+            views. <strong>Not needed</strong> for cost assessment or BOM generation — skip this for now if you just
+            want to try the agent on a sample customer. You can connect a pipeline any time later.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -119,14 +126,18 @@ export default async function SetupPage() {
       </Card>
 
       {/* Continue */}
-      <div className="flex items-center justify-between pt-2 border-t">
+      <div className="flex items-center justify-between pt-2 border-t gap-3 flex-wrap">
         <p className="text-xs text-muted-foreground">
-          {allDone
-            ? "All set — heading to the dashboard."
-            : `${fyDone ? 1 : 0} + ${pipelineDone ? 1 : 0} of 2 done.`}
+          {!fyDone
+            ? "Define your fiscal year above to unlock the dashboard."
+            : pipelineDone
+              ? "All set — fiscal year + pipeline configured."
+              : "Fiscal year saved. Pipeline upload is optional — you can do it later from Settings."}
         </p>
-        <Button asChild disabled={!allDone}>
-          <Link href="/dashboard">Continue to dashboard →</Link>
+        <Button asChild disabled={!canContinue}>
+          <Link href="/dashboard">
+            {pipelineDone ? "Continue to dashboard →" : fyDone ? "Skip pipeline & continue →" : "Continue to dashboard →"}
+          </Link>
         </Button>
       </div>
     </div>

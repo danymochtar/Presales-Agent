@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { getAwsLiveVmPrice, batchAwsLiveVmPrices, _resetAwsLiveCache } from "@/lib/pricing/aws-live";
+import type { ComputeQuoteFound, ComputeQuoteResult } from "@/lib/pricing/types";
+
+function mustFound(r: ComputeQuoteResult | null): ComputeQuoteFound {
+  expect(r).not.toBeNull();
+  expect(r!.found).toBe(true);
+  return r as ComputeQuoteFound;
+}
 
 // Minimal offer-file fixture matching the real Bulk API schema.
 function fakeOffer() {
@@ -131,18 +138,16 @@ describe("aws-live pricing", () => {
   });
 
   it("resolves on-demand Linux m5.large in Singapore", async () => {
-    const r = await getAwsLiveVmPrice({ instanceType: "m5.large", region: "ap-southeast-1", os: "linux" });
-    expect(r).not.toBeNull();
-    expect(r!.cloud).toBe("aws");
-    expect(r!.hourlyUsd).toBeCloseTo(0.123, 4);
-    expect(r!.monthlyUsd).toBeCloseTo(0.123 * 730, 1);
-    expect(r!.notes.join(" ")).toMatch(/Live price/);
+    const r = mustFound(await getAwsLiveVmPrice({ instanceType: "m5.large", region: "ap-southeast-1", os: "linux" }));
+    expect(r.cloud).toBe("aws");
+    expect(r.hourlyUsd).toBeCloseTo(0.123, 4);
+    expect(r.monthlyUsd).toBeCloseTo(0.123 * 730, 1);
+    expect((r.notes ?? []).join(" ")).toMatch(/Live price/);
   });
 
   it("filters by OS — Windows resolves a distinct SKU", async () => {
-    const r = await getAwsLiveVmPrice({ instanceType: "m5.large", region: "ap-southeast-1", os: "windows" });
-    expect(r).not.toBeNull();
-    expect(r!.hourlyUsd).toBeCloseTo(0.234, 4);
+    const r = mustFound(await getAwsLiveVmPrice({ instanceType: "m5.large", region: "ap-southeast-1", os: "windows" }));
+    expect(r.hourlyUsd).toBeCloseTo(0.234, 4);
   });
 
   it("returns null for unknown region (not in REGION_TO_LOCATION map)", async () => {
@@ -162,23 +167,20 @@ describe("aws-live pricing", () => {
   });
 
   it("prefers No-Upfront term for reserved-1y", async () => {
-    const r = await getAwsLiveVmPrice({ instanceType: "m5.large", region: "ap-southeast-1", term: "reserved-1y" });
-    expect(r).not.toBeNull();
-    expect(r!.hourlyUsd).toBeCloseTo(0.080, 4);
+    const r = mustFound(await getAwsLiveVmPrice({ instanceType: "m5.large", region: "ap-southeast-1", term: "reserved-1y" }));
+    expect(r.hourlyUsd).toBeCloseTo(0.080, 4);
   });
 
   it("computes effective hourly for All-Upfront reserved-3y", async () => {
-    const r = await getAwsLiveVmPrice({ instanceType: "m5.large", region: "ap-southeast-1", term: "reserved-3y" });
-    expect(r).not.toBeNull();
+    const r = mustFound(await getAwsLiveVmPrice({ instanceType: "m5.large", region: "ap-southeast-1", term: "reserved-3y" }));
     // upfront 2102.40 / (8760*3) ≈ 0.080
-    expect(r!.hourlyUsd).toBeCloseTo(0.080, 3);
+    expect(r.hourlyUsd).toBeCloseTo(0.080, 3);
   });
 
   it("approximates savings-plan from RI + 4% uplift", async () => {
-    const r = await getAwsLiveVmPrice({ instanceType: "m5.large", region: "ap-southeast-1", term: "savings-1y" });
-    expect(r).not.toBeNull();
-    expect(r!.hourlyUsd).toBeCloseTo(0.080 * 1.04, 3);
-    expect(r!.notes.join(" ")).toMatch(/Savings Plan/);
+    const r = mustFound(await getAwsLiveVmPrice({ instanceType: "m5.large", region: "ap-southeast-1", term: "savings-1y" }));
+    expect(r.hourlyUsd).toBeCloseTo(0.080 * 1.04, 3);
+    expect((r.notes ?? []).join(" ")).toMatch(/Savings Plan/);
   });
 
   it("batches multiple lookups against a single offer fetch", async () => {
