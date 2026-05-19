@@ -119,14 +119,28 @@ Subtotal per group + grand total.
 
 ## 4. Landing zone candidates
 Render the supplied \`landingZone\` block per cloud as a markdown table:
-| Category | Component | Framework | Description | Notes |
+| Category | Component | Framework | Monthly USD | Notes |
 
-Use the framework label (CAF / WAR / Cloud Foundation) verbatim. Do NOT invent components beyond the supplied list. Add a one-line note if a pair-only component is included (e.g. "Surfaces because a web tier was detected"). For non-VM workload profiles (siem_soc / ai_ml / data_platform), include only the network + ops + identity baseline and call out in the section header that the catalog is filtered to baseline-only because no application workloads were detected.
+Use the framework label (CAF / LZA / Cloud Foundation) verbatim. Pull \`monthlyUsd\` from each component — when it's null, write "Variable — see note" and copy the \`pricingNote\` into Notes. When present, render the dollar figure with thousand separators. Sum a "Landing-zone baseline subtotal" row at the end (sum of priced rows; flag the count of unpriced rows alongside). Do NOT invent components beyond the supplied list. Add a one-line note if a pair-only component is included (e.g. "Surfaces because a web tier was detected"). For non-VM workload profiles (siem_soc / ai_ml / data_platform), include only the network + ops + identity baseline and call out in the section header that the catalog is filtered to baseline-only because no application workloads were detected.
+
+## 4b. Commitment-model comparison (per cloud)
+**Pull the \`commitmentTotals\` block per cloud and render this table verbatim:**
+
+| Commitment | Monthly USD | Annual USD | Savings vs PAYG | Recommended for |
+|---|---|---|---|---|
+| Pay-as-you-go | {consumption} | × 12 | — | Dev / UAT / unpredictable workloads |
+| Reserved 1y | {reserved-1y} | × 12 | (PAYG − RI-1y) ÷ PAYG | Steady-state non-prod + early prod |
+| Reserved 3y | {reserved-3y} | × 12 | (PAYG − RI-3y) ÷ PAYG | Confirmed long-term prod |
+| Savings Plan 1y | {savings-1y} | × 12 | (PAYG − SP-1y) ÷ PAYG | Steady-state with VM-family flexibility |
+| Savings Plan 3y | {savings-3y} | × 12 | (PAYG − SP-3y) ÷ PAYG | Long-term with flexibility |
+
+State the **chosen** model up front (matches \`purchase model:\` in the user message header) and explain in 1-2 sentences which tier of workloads warrants which commitment given the customer's risk appetite + signed deal length. Compute the savings % from the supplied numbers — do NOT estimate.
 
 ## 5. Commercial summary (cloud consumption only)
-- Year 1 cloud total (monthly × 12)
+- Year 1 cloud total (monthly × 12) at the chosen purchase model
 - Year 2-3 (cloud recurring × 12, RI/Savings Plan savings if applicable)
 - 3-year cloud TCO
+- **Landing-zone baseline included** (from Section 4 subtotal)
 **Do NOT include professional services / mandays / implementation effort in this BOM. Those are produced as a separate Professional Services deliverable so the customer can see cloud burn and one-time implementation costs in distinct line items. Refer the reader to the Professional Services deliverable when summarising.**
 
 ## 6. Assumptions

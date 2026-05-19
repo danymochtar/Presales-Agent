@@ -104,12 +104,46 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   });
   const templateSection = formatTemplatesAsPromptSection(templates);
 
+  // Sized estimate bridge — if a BOM already exists for any cloud in scope,
+  // pull the headline monthly + commitment numbers so the Assessment closes
+  // with concrete cost figures instead of hand-waving to "see BOM".
+  const recentBoms = await prisma.deliverable.findMany({
+    where: { engagementId: project.id, type: "bom" },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+  });
+  const bomByCloud: Record<string, { version: number; monthlyUsd: number; lzMonthlyUsd: number; commitments: Record<string, number>; generatedAt: string }> = {};
+  for (const c of cloudsToAssess) {
+    const latest = recentBoms.find((d) => d.cloudProvider === c)
+      ?? (c === "azure" ? recentBoms.find((d) => d.cloudProvider === null) : undefined);
+    if (!latest) continue;
+    const m = (latest.metadata ?? {}) as {
+      monthlyComputeBaselineUsdByCloud?: Record<string, number>;
+      landingZoneBaselineMonthlyUsdByCloud?: Record<string, number>;
+      commitmentSummaryByCloud?: Record<string, Record<string, number>>;
+    };
+    bomByCloud[c] = {
+      version: latest.version,
+      monthlyUsd: m.monthlyComputeBaselineUsdByCloud?.[c] ?? 0,
+      lzMonthlyUsd: m.landingZoneBaselineMonthlyUsdByCloud?.[c] ?? 0,
+      commitments: m.commitmentSummaryByCloud?.[c] ?? {},
+      generatedAt: latest.createdAt.toISOString(),
+    };
+  }
+
   const userMessage = `# Generate Migration Assessment for project: ${project.name}
 
 mode: ${mode}
 clouds: [${cloudsToAssess.join(", ")}]
 primaryCloud: ${project.primaryCloud ?? "(not yet decided)"}
 ${templateSection ? `\n${templateSection}` : ""}
+
+${Object.keys(bomByCloud).length > 0 ? `## Sized cost bridge (latest BOM per cloud)
+\`\`\`json
+${JSON.stringify(bomByCloud, null, 2)}
+\`\`\`
+Append a Section 12 "Sized cost estimate" referencing these numbers. Quote year-1 + 3-year USD per cloud using the most-economic commitment in each \`commitments\` map. Do NOT recompute prices — use the supplied values. State which BOM version was the source.
+` : "_No BOM generated yet — Section 12 (Sized cost estimate) can be deferred until the BOM is produced._\n"}
 
 ## Project
 - Customer: ${project.customer}

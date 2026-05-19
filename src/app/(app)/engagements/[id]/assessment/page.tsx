@@ -3,6 +3,8 @@ import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { DeliverableWorkspace } from "@/components/deliverable-workspace";
+import { LlmCostStrip } from "@/components/bom/llm-cost-strip";
+import { costForDeliverable } from "@/lib/ai-logging";
 
 const CLOUD_LABELS: Record<string, string> = {
   azure: "Azure",
@@ -43,9 +45,16 @@ export default async function AssessmentPage({
   });
   const selected = v ? versionsForCloud.find((d) => d.version === Number(v)) : versionsForCloud[0];
   const hasInventory = project.inputs.some((i) => i.workloadsJson);
+  const cost = selected ? await costForDeliverable(selected.id) : null;
 
   return (
-    <DeliverableWorkspace
+    <div className="space-y-4">
+      {cost && cost.totalCalls > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <LlmCostStrip cost={cost} />
+        </div>
+      )}
+      <DeliverableWorkspace
       projectId={project.id}
       projectName={project.name}
       projectMode={project.mode as "production" | "training"}
@@ -61,5 +70,6 @@ export default async function AssessmentPage({
       activeCloud={activeCloud}
       basePath={`/engagements/${project.id}/assessment`}
     />
+    </div>
   );
 }

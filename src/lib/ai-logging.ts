@@ -60,3 +60,53 @@ export function estimateCostUsd(model: string, inputTokens: number, outputTokens
   const cost = (inputTokens / 1_000_000) * rates.input + (outputTokens / 1_000_000) * rates.output;
   return Math.round(cost * 10000) / 10000;
 }
+
+export type DeliverableCostBreakdown = {
+  deliverableId: string;
+  totalCalls: number;
+  succeededCalls: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalUsd: number;
+  durationMs: number;
+  modelMix: Record<string, { calls: number; inputTokens: number; outputTokens: number; usd: number }>;
+};
+
+/**
+ * Aggregates every LlmCall row linked to a deliverable into a single
+ * cost breakdown — used by the BOM / Assessment workspace header to
+ * surface "this generation cost $X.YZ" to the user inline. Best-effort
+ * (returns zeros when no calls exist).
+ */
+export async function costForDeliverable(deliverableId: string): Promise<DeliverableCostBreakdown> {
+  const calls = await prisma.llmCall.findMany({
+    where: { deliverableId },
+    select: { model: true, inputTokens: true, outputTokens: true, durationMs: true, succeeded: true },
+  });
+  const breakdown: DeliverableCostBreakdown = {
+    deliverableId,
+    totalCalls: calls.length,
+    succeededCalls: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    totalUsd: 0,
+    durationMs: 0,
+    modelMix: {},
+  };
+  for (const c of calls) {
+    const usd = estimateCostUsd(c.model, c.inputTokens, c.outputTokens);
+    breakdown.inputTokens += c.inputTokens;
+    breakdown.outputTokens += c.outputTokens;
+    breakdown.totalUsd += usd;
+    breakdown.durationMs += c.durationMs;
+    if (c.succeeded) breakdown.succeededCalls += 1;
+    const slot = breakdown.modelMix[c.model] ?? { calls: 0, inputTokens: 0, outputTokens: 0, usd: 0 };
+    slot.calls += 1;
+    slot.inputTokens += c.inputTokens;
+    slot.outputTokens += c.outputTokens;
+    slot.usd += usd;
+    breakdown.modelMix[c.model] = slot;
+  }
+  breakdown.totalUsd = Math.round(breakdown.totalUsd * 10000) / 10000;
+  return breakdown;
+}

@@ -5,7 +5,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { gateway, DEFAULT_MODEL } from "@/lib/ai";
 import { GENERATE_BOM_SYSTEM } from "@/lib/prompts/generate-bom";
-import { batchPriceCompute, azureLabelToArm, type CloudType } from "@/lib/pricing";
+import { batchPriceCompute, batchPriceComputeAllTerms, azureLabelToArm, ALL_TERMS, type CloudType } from "@/lib/pricing";
 import { PURCHASE_MODEL_LABELS, type Term, type ComputeQuoteResult } from "@/lib/pricing/types";
 import { licensingScenario } from "@/lib/pricing/licensing";
 import { fxRateOrFallback, usdTo } from "@/lib/pricing/fx";
@@ -17,7 +17,9 @@ import { classifyWorkload, WORKLOAD_TYPE_LABELS } from "@/lib/inventory/workload
 import { detectComponents, COMPONENT_KIND_LABELS } from "@/lib/inventory/component-detector";
 import { recommendPaas, MIGRATION_STRATEGY_LABELS, type MigrationStrategy } from "@/lib/inventory/paas-recommender";
 import { lzForCloud } from "@/lib/landing-zone/catalog";
+import { lzMonthlyUsd, lzBaselineMonthlyUsd } from "@/lib/landing-zone/pricing";
 import { parseLineItemsFromBomMarkdown } from "@/lib/exporters/bom-xlsx";
+import { diffBom } from "@/lib/exporters/bom-diff";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -123,11 +125,22 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     const linuxSkus = [...new Set(sizedWorkloads.filter((w) => w.os === "linux" || w.os === "other").map((w) => w.recommendedSku!))];
     const winSkus = [...new Set(sizedWorkloads.filter((w) => w.os === "windows").map((w) => w.recommendedSku!))];
 
-    const [linuxPrices, winPrices] = await Promise.all([
-      linuxSkus.length ? batchPriceCompute(cloud, linuxSkus, region, "linux", purchaseModel) : Promise.resolve({}),
-      winSkus.length ? batchPriceCompute(cloud, winSkus, region, "windows", purchaseModel) : Promise.resolve({}),
+    // Fetch all 5 commitment terms (PAYG / RI-1y / RI-3y / SP-1y / SP-3y)
+    // in parallel so the BOM can render a side-by-side commitment table.
+    // The chosen `purchaseModel` is what we treat as the "headline" price.
+    const emptyAllTerms = (): Record<string, Awaited<ReturnType<typeof batchPriceComputeAllTerms>>[string]> => ({});
+    const [linuxAllTerms, winAllTerms] = await Promise.all([
+      linuxSkus.length ? batchPriceComputeAllTerms(cloud, linuxSkus, region, "linux") : Promise.resolve(emptyAllTerms()),
+      winSkus.length ? batchPriceComputeAllTerms(cloud, winSkus, region, "windows") : Promise.resolve(emptyAllTerms()),
     ]);
+    const linuxPrices: Record<string, ComputeQuoteResult> = Object.fromEntries(
+      Object.entries(linuxAllTerms).map(([sku, r]) => [sku, r.byTerm[purchaseModel]]),
+    );
+    const winPrices: Record<string, ComputeQuoteResult> = Object.fromEntries(
+      Object.entries(winAllTerms).map(([sku, r]) => [sku, r.byTerm[purchaseModel]]),
+    );
 
+    // Headline monthly = sum at selected purchase model.
     const baseMonthly = sizedWorkloads.reduce((sum, w) => {
       const sku = w.recommendedSku;
       if (!sku) return sum;
@@ -136,9 +149,35 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       if (r && r.found) return sum + (r.monthlyUsd ?? 0) * w.count;
       return sum;
     }, 0);
+
+    // Per-term totals — used by the BOM prompt to surface a multi-commitment
+    // comparison + by metadata.commitmentSummary so the dashboard tile can
+    // show break-even math without re-running the BOM.
+    const commitmentTotals: Partial<Record<Term, number>> = {};
+    for (const term of ALL_TERMS) {
+      const total = sizedWorkloads.reduce((sum, w) => {
+        const sku = w.recommendedSku;
+        if (!sku) return sum;
+        const r = (w.os === "windows" ? winAllTerms : linuxAllTerms)[sku];
+        const q = r?.byTerm[term];
+        if (q && q.found) return sum + (q.monthlyUsd ?? 0) * w.count;
+        return sum;
+      }, 0);
+      commitmentTotals[term] = Math.round(total * 100) / 100;
+    }
+
     const licensing = workloadSet
       ? licensingScenario(cloud, { ...workloadSet, workloads: sizedWorkloads }, baseMonthly)
       : null;
+
+    // Landing-zone components for this cloud — now with reference monthly
+    // prices so the LZ section of the BOM rolls into the grand total.
+    const landingZoneComponents = lzForCloud(cloud, detectedKinds);
+    const landingZonePriced = landingZoneComponents.map((c) => {
+      const p = lzMonthlyUsd(cloud, c.name);
+      return { ...c, monthlyUsd: p.monthlyUsd, pricingNote: p.note };
+    });
+    const lzTotals = lzBaselineMonthlyUsd(cloud, landingZoneComponents.map((c) => c.name));
 
     return [cloud, {
       regionLabel: labelPrimary ?? PRICING_REGION_DEFAULTS[cloud].primary,
@@ -148,8 +187,13 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       purchaseModelLabel: PURCHASE_MODEL_LABELS[purchaseModel],
       sizedWorkloads,
       prices: { linux: linuxPrices, windows: winPrices },
+      pricesByTerm: { linux: linuxAllTerms, windows: winAllTerms },
+      commitmentTotals,
       licensing,
-      landingZone: lzForCloud(cloud, detectedKinds),
+      landingZone: landingZonePriced,
+      landingZoneBaselineMonthlyUsd: lzTotals.totalUsd,
+      landingZonePricedCount: lzTotals.pricedCount,
+      landingZoneUnpricedCount: lzTotals.unpricedCount,
       paasRecommendations: workloadSet
         ? recommendPaas(workloadSet, detectedComponents, cloud, migrationStrategy)
         : [],
@@ -303,6 +347,13 @@ Generate the BOM now in Markdown following the **${mode}-mode** structure. Apply
           where: { engagementId: project.id, type: "bom", cloudProvider },
           orderBy: { version: "desc" },
         });
+        // Compute the version diff vs. the previous BOM so we can surface
+        // "what changed" on the workspace without re-parsing later. Stored
+        // as JSON on metadata.
+        const prevLineItems = (last?.metadata as { lineItems?: unknown } | null)?.lineItems;
+        const diffVsPrev = last && Array.isArray(prevLineItems)
+          ? diffBom(prevLineItems as Parameters<typeof diffBom>[0], lineItems)
+          : null;
         const version = (last?.version ?? 0) + 1;
         const saved = await prisma.deliverable.create({
           data: {
@@ -343,6 +394,22 @@ Generate the BOM now in Markdown following the **${mode}-mode** structure. Apply
                   void lic;
                 }),
               ),
+              // Per-cloud per-commitment monthly USD across all 5 terms.
+              // The dashboard tile + overview panel use this to render a
+              // savings comparison without re-running the BOM.
+              commitmentSummaryByCloud: Object.fromEntries(
+                Object.entries(pricingByCloud).map(([c, v]) => {
+                  const t = (v as { commitmentTotals?: Partial<Record<Term, number>> }).commitmentTotals ?? {};
+                  return [c, t];
+                }),
+              ),
+              landingZoneBaselineMonthlyUsdByCloud: Object.fromEntries(
+                Object.entries(pricingByCloud).map(([c, v]) => {
+                  const total = (v as { landingZoneBaselineMonthlyUsd?: number }).landingZoneBaselineMonthlyUsd ?? 0;
+                  return [c, total];
+                }),
+              ),
+              diffVsPrevious: diffVsPrev as unknown as object | null,
               templateIds: templates.map((t) => t.id),
               generatedAt: new Date().toISOString(),
               model: DEFAULT_MODEL,

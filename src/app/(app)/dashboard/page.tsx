@@ -53,7 +53,7 @@ export default async function DashboardPage() {
   const thresholds = tenantThresholds(tenant);
   const SEVEN_DAYS_AGO = new Date(Date.now() - thresholds.dashboardLookbackDays * 24 * 60 * 60 * 1000);
 
-  const [engagements, recentDeliverables, opportunities, rateCount, catalogCount, patternCount, templateCount] = await Promise.all([
+  const [engagements, recentDeliverables, opportunities, recentBoms, rateCount, catalogCount, patternCount, templateCount] = await Promise.all([
     prisma.engagement.findMany({
       where: { tenantId: tenant.id },
       orderBy: { updatedAt: "desc" },
@@ -72,11 +72,53 @@ export default async function DashboardPage() {
       where: { tracker: { tenantId: tenant.id } },
       select: { customer: true, valueUsd: true, status: true },
     }),
+    // BOM-tile feed — top 6 recent BOMs across all engagements + clouds.
+    prisma.deliverable.findMany({
+      where: { engagement: { tenantId: tenant.id }, type: "bom" },
+      orderBy: { createdAt: "desc" },
+      take: 6,
+      include: { engagement: { select: { id: true, name: true, customer: true } } },
+    }),
     prisma.rateCardItem.count({ where: { tenantId: tenant.id } }),
     prisma.serviceCatalogItem.count({ where: { tenantId: tenant.id } }),
     prisma.learnedPattern.count({ where: { tenantId: tenant.id, active: true } }),
     prisma.template.count({ where: { tenantId: tenant.id, status: "active" } }),
   ]);
+
+  // ---------- BOM tile rollups ----------
+  type BomTileRow = {
+    id: string;
+    engagementId: string;
+    engagementName: string;
+    customer: string;
+    cloud: string;
+    version: number;
+    createdAt: Date;
+    monthlyUsd: number;
+    annualUsd: number;
+  };
+  const bomTileRows: BomTileRow[] = recentBoms.map((d) => {
+    const m = (d.metadata ?? {}) as { monthlyComputeBaselineUsdByCloud?: Record<string, number>; landingZoneBaselineMonthlyUsdByCloud?: Record<string, number> };
+    const cloud = d.cloudProvider ?? "azure";
+    const wkl = m.monthlyComputeBaselineUsdByCloud?.[cloud] ?? 0;
+    const lz = m.landingZoneBaselineMonthlyUsdByCloud?.[cloud] ?? 0;
+    const monthlyUsd = Math.round((wkl + lz) * 100) / 100;
+    return {
+      id: d.id,
+      engagementId: d.engagement.id,
+      engagementName: d.engagement.name,
+      customer: d.engagement.customer,
+      cloud,
+      version: d.version,
+      createdAt: d.createdAt,
+      monthlyUsd,
+      annualUsd: Math.round(monthlyUsd * 12),
+    };
+  });
+  const bomTotalsPerCloud: Record<string, number> = {};
+  for (const r of bomTileRows) {
+    bomTotalsPerCloud[r.cloud] = (bomTotalsPerCloud[r.cloud] ?? 0) + r.annualUsd;
+  }
 
   const activeEngagements = engagements.filter((e) => isOpenStage(e.stage));
   const wonEngagements = engagements.filter((e) => e.stage === "closed_won");
@@ -168,6 +210,72 @@ export default async function DashboardPage() {
               </Button>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* ───────── BOM headline tile ───────── */}
+      <Card className="border-primary/20">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2 flex-wrap">
+            <span>🧾 BOM pipeline</span>
+            <HelpTooltip text="Per-cloud annual cost rolled up across every BOM generated this tenant. Each row shows the latest BOM per engagement with monthly + annual USD pulled from the stored line-items + landing-zone baseline. Click to open the BOM workspace." />
+            <span className="text-xs font-normal text-muted-foreground">
+              {bomTileRows.length} recent BOM{bomTileRows.length === 1 ? "" : "s"}
+            </span>
+          </CardTitle>
+          <p className="text-xs text-muted-foreground">
+            The headline deliverable — Azure / AWS cost models grounded in live retail prices + Reference list pricing for landing-zone components. Drives the proposal conversation.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {bomTileRows.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No BOMs generated yet. <Link href="/engagements/new" className="underline">Create an engagement</Link>, upload an inventory, then run the BOM generator on the engagement page.
+            </p>
+          ) : (
+            <>
+              {Object.keys(bomTotalsPerCloud).length > 0 && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {(["azure", "aws", "gcp", "compare"] as const).map((c) => {
+                    const total = bomTotalsPerCloud[c];
+                    if (!total) return null;
+                    return (
+                      <div key={c} className="rounded-md border p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <CloudChip cloud={c} size="xs" />
+                          <span className="text-[10px] text-muted-foreground uppercase">Annual</span>
+                        </div>
+                        <div className="text-lg font-semibold tabular-nums mt-1">${Math.round(total).toLocaleString()}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <ul className="divide-y border rounded-md">
+                {bomTileRows.slice(0, 5).map((r) => (
+                  <li key={r.id}>
+                    <Link
+                      href={`/engagements/${r.engagementId}/bom?cloud=${r.cloud}&v=${r.version}`}
+                      className="block px-3 py-2 hover:bg-accent transition"
+                    >
+                      <div className="flex items-center justify-between gap-2 flex-wrap text-sm">
+                        <span className="flex items-center gap-2 flex-wrap min-w-0">
+                          <CloudChip cloud={r.cloud} size="xs" />
+                          <span className="font-medium truncate">{r.customer}</span>
+                          <span className="text-muted-foreground truncate">{r.engagementName}</span>
+                          <span className="text-[10px] uppercase rounded px-1.5 py-0.5 bg-accent">v{r.version}</span>
+                        </span>
+                        <span className="text-xs tabular-nums text-muted-foreground">
+                          <span className="font-medium text-foreground">${Math.round(r.monthlyUsd).toLocaleString()}/mo</span>
+                          <span> · ${Math.round(r.annualUsd).toLocaleString()}/yr · {relTime(r.createdAt)}</span>
+                        </span>
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </CardContent>
       </Card>
 

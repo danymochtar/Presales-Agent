@@ -61,6 +61,39 @@ export async function batchPriceCompute(
   throw new Error(`Cloud ${cloud} not supported (GCP deferred)`);
 }
 
+// All-commitments fetch — five priced variants (PAYG / RI-1y / RI-3y /
+// SP-1y / SP-3y) per SKU in one call. Used by the BOM route to surface a
+// side-by-side commitment comparison so the architect can recommend the
+// right purchase model with the right break-even math.
+export type ComputeMultiTermResult = {
+  sku: string;
+  cloud: CloudType;
+  region: string;
+  os: OsType;
+  byTerm: Record<Term, ComputeQuoteResult>;
+};
+
+export const ALL_TERMS: Term[] = ["consumption", "reserved-1y", "reserved-3y", "savings-1y", "savings-3y"];
+
+export async function batchPriceComputeAllTerms(
+  cloud: CloudType,
+  skus: string[],
+  region: string,
+  os: OsType,
+): Promise<Record<string, ComputeMultiTermResult>> {
+  if (skus.length === 0) return {};
+  // Run all five terms in parallel — the underlying batchPriceCompute paths
+  // cache per (filter, currency) so re-hitting Azure / AWS isn't expensive.
+  const tables = await Promise.all(ALL_TERMS.map((t) => batchPriceCompute(cloud, skus, region, os, t)));
+  const out: Record<string, ComputeMultiTermResult> = {};
+  for (const sku of skus) {
+    const byTerm: Record<string, ComputeQuoteResult> = {};
+    ALL_TERMS.forEach((t, idx) => { byTerm[t] = tables[idx][sku]; });
+    out[sku] = { sku, cloud, region, os, byTerm: byTerm as Record<Term, ComputeQuoteResult> };
+  }
+  return out;
+}
+
 // Region defaults per cloud, optimized for Malaysia market.
 // Azure region in Malaysia is "Malaysia West" (armName malaysiawest).
 export const DEFAULT_REGIONS: Record<CloudType, { primary: string; dr: string; primaryLabel: string; drLabel: string }> = {
